@@ -1,0 +1,7 @@
+chromadb
+requests
+pypdf
+python-docx
+pytesseract
+Pillow
+psd-tools

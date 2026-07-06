@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Data & indexes (contains extracted personal file content — never commit)
+vector_store/
+data/
+AI-Workspace/
+logs/
+DOCS/
+
+# Editor/OS
+.vscode/
+.DS_Store
