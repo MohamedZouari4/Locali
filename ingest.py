@@ -52,6 +52,48 @@ def read_text(filepath):
         return pytesseract.image_to_string(Image.open(filepath))
     return None 
     
+def is_excluded_path(path):
+    """True if path falls under any current exclusion rule (system/privacy/ignored dir/skip extension)
+    or outside the configured scan roots. Used to prune stale index entries left over from a
+    previous, broader SCAN_DRIVES/IGNORE_DIRS configuration.
+    """
+    norm = os.path.abspath(path).replace("\\", "/")
+
+    if not any(norm.startswith(os.path.abspath(root).replace("\\", "/")) for root in SCAN_DRIVES):
+        return True
+    if any(norm.startswith(ex) for ex in SYSTEM_EXCLUDE):
+        return True
+    if any(priv in norm for priv in PRIVACY_EXCLUDE):
+        return True
+    if any(part in IGNORE_DIRS for part in norm.split("/")):
+        return True
+    if norm.rsplit(".", 1)[-1].lower() in SKIP_EXTENSIONS:
+        return True
+    return False
+
+def prune_stale(progress_every=2000):
+    """Remove index entries whose source file no longer exists or no longer
+    satisfies the current scan/exclusion rules (e.g. it moved out of SCAN_DRIVES,
+    or a directory it lives under was added to IGNORE_DIRS/PRIVACY_EXCLUDE since
+    it was indexed).
+    """
+    total = collection.count()
+    checked, removed = set(), 0
+    for offset in range(0, total, 1000):
+        batch = collection.get(limit=1000, offset=offset, include=["metadatas"])
+        for meta in batch["metadatas"]:
+            source = meta["source"]
+            if source in checked:
+                continue
+            checked.add(source)
+            if len(checked) % progress_every == 0:
+                print(f"...checked {len(checked)} sources, removed {removed} so far")
+            if not os.path.exists(source) or is_excluded_path(source):
+                collection.delete(where={"source": source})
+                removed += 1
+    print(f"Pruned {removed} stale/excluded sources out of {len(checked)} checked")
+    return removed
+
 def walk_data_dir(scan_drives):
     for drive in scan_drives:
         for dirpath, dirnames, filenames in os.walk(drive):
@@ -153,6 +195,9 @@ def ingest_all(max_size_mb=25, progress_every=500):
           f"{unchanged} unchanged, {scanned} scanned total in {elapsed:.0f}s")
 
 if __name__ == "__main__":
-    ingest_all()
-
- # unsupported type for now
+    import sys
+    if "--prune-only" in sys.argv:
+        prune_stale()
+    else:
+        ingest_all()
+        prune_stale()

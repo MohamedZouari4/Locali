@@ -4,7 +4,17 @@ OLLAMA_URL = "http://localhost:11434"
 CHAT_MODEL = "qwen3:4b"
 EMBEDDING_MODEL = "nomic-embed-text:latest"
 
-SCAN_DRIVES = ["C:/", "D:/"]
+USER_HOME = os.path.expanduser("~")
+
+SCAN_DRIVES = [
+    "D:/",
+    os.path.join(USER_HOME, "Desktop"),
+    os.path.join(USER_HOME, "Documents"),
+    os.path.join(USER_HOME, "Downloads"),
+    os.path.join(USER_HOME, "Music"),
+    os.path.join(USER_HOME, "Pictures"),
+    os.path.join(USER_HOME, "Videos"),
+]
 DATA_DIR = os.path.abspath("data")
 VECTOR_DIR = os.path.abspath("vector_store")
 LOG_FILE = os.path.abspath("logs/actions.log")
