@@ -19,12 +19,12 @@ while True:
     use_docs = user_input.lower().startswith("doc:")
     query = user_input[4:].strip() if use_docs else user_input
 
-    answer, sources = ask(query, use_docs=use_docs)
+    answer, sources, used_tools = ask(query, use_docs=use_docs)
 
-    print (f"Assistant: {answer}")
-    if sources :
-        unique_sources = sorted(set(sources))
-        print(f"Sources: {chr(44).join(unique_sources)}")
-    print() # Add a blank line for readability
+    prefix = "🔧" if used_tools else "💬"
+    print(f"\n{prefix} Assistant: {answer}")
+    if sources:
+        print(f"Sources: {', '.join(sorted(set(sources)))}")
+    print()
 
 
