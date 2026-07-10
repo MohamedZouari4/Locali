@@ -193,6 +193,11 @@ def ingest_all(max_size_mb=25, progress_every=500):
     elapsed = time.time() - start_time
     print(f"Indexed {indexed} files ({doc_id} chunks), skipped {skipped} unsupported/empty/oversized files, "
           f"{unchanged} unchanged, {scanned} scanned total in {elapsed:.0f}s")
+    
+def reset_index():
+    """Delete all documents from the index."""
+    collection.delete(where={})
+    print("Index reset complete.")
 
 if __name__ == "__main__":
     import sys
