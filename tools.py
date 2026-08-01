@@ -55,6 +55,20 @@ def _log(action):
         f.write(f"{entry} | hash={entry_hash}\n")
     os.chmod(LOG_FILE, stat.S_IREAD)
 
+    # Queryable mirror only — the hash-chained file above remains the
+    # authoritative, tamper-evident record. A failure here must never
+    # affect the real log, so it's isolated and silently ignored.
+    try:
+        from database import get_connection
+        conn = get_connection()
+        conn.execute(
+            "INSERT INTO audit_log (action, target_path, result, success) VALUES (?, ?, ?, ?)",
+            (action, None, action, True)
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 def verify_log_integrity():
     """Walk LOG_FILE's hash chain. Returns (True, None) if intact,
     or (False, line_number) for the first line where the chain breaks."""

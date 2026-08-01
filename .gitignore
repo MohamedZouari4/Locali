@@ -13,3 +13,6 @@ DOCS/
 # Editor/OS
 .vscode/
 .DS_Store
+.auth_token
+*.log
+assistant.db

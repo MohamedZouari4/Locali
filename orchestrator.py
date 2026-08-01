@@ -1,5 +1,6 @@
 import sys
 import requests
+import database
 import tools
 from config import CHAT_MODEL, OLLAMA_URL
 from retriever import retrieve
@@ -140,7 +141,7 @@ def build_prompt(query, context_block):
         f"{context_block}\n\n"
         f"Question: {query}"
     )
-def ask(query, use_docs=False, project=None):
+def ask(query, use_docs=False, project=None, conversation_id=None):
     SYSTEM_PROMPT = (
         "You are a local assistant with access to tools for file operations: "
         "listing files, moving/renaming files, creating folders, organizing files by "
@@ -169,6 +170,7 @@ def ask(query, use_docs=False, project=None):
 
     used_tools = False
     MAX_TOOL_ROUNDS = 6
+    answer = "Reached the tool-call limit before finishing this request."
     for _ in range(MAX_TOOL_ROUNDS):
         resp = requests.post(f"{OLLAMA_URL}/api/chat", json={
             "model": CHAT_MODEL,
@@ -199,10 +201,22 @@ def ask(query, use_docs=False, project=None):
             else:
                 try:
                     result = fn(**arguments)
+                except PermissionError as e:
+                    result = f"Blocked: {e}"
+                    tools._log(f"blocked {name}({arguments}): {e}")
+                except FileNotFoundError as e:
+                    result = f"Not found: {e}"
                 except Exception as e:
                     result = f"Error running {name}: {e}"
             if DEBUG:
                 print(f"[DEBUG] Tool call result: {result}")
             messages.append({"role": "tool", "content": str(result)})
+    if conversation_id:
+        try:
+            database.save_conversation(conversation_id, "user", query)
+            database.save_conversation(conversation_id, "assistant", answer, sources)
+        except Exception as e:
+            if DEBUG:
+                print(f"[DEBUG] Error saving conversation: {e}")
 
-    return "Reached the tool-call limit before finishing this request.", sources, used_tools
+    return "Reached the tool-call limit before finishing this request.", sources, used_tools, answer

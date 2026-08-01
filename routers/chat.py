@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from orchestrator import ask
+from services import chat_service
 
 router = APIRouter()
 
@@ -13,7 +14,6 @@ class ChatResponse(BaseModel):
     response: str
     sources: list[str]
 
-@router.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(request: ChatRequest):
-    response, sources, _ = ask(request.message, use_docs=request.use_docs, project=request.project)
-    return ChatResponse(response=response, sources=sources)
+@router.post("/chat")
+def chat(req: ChatRequest):
+    return chat_service.get_answer(req.message, use_docs=req.use_docs, project=req.project)

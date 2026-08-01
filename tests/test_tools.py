@@ -172,6 +172,16 @@ class TestFindEmptyFiles(SandboxTestCase):
         with self.assertRaises(FileNotFoundError):
             tools.find_empty_files("nope")
 
+    # TestListFiles
+    def test_missing_path_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            tools.list_files("does_not_exist")
+
+    # TestOrganizeByExtension  
+    def test_missing_dir_raises(self):
+        with self.assertRaises(NotADirectoryError):
+            tools.organize_by_extension("nope")
+
 
 if __name__ == "__main__":
     unittest.main()
