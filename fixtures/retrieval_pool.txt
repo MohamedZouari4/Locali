@@ -1,0 +1,102 @@
+
+# q001 [exact_term]  is_safe_path
+#   mark relevant files, then copy into the fixture's `relevant:` list
+#     [ ] D:/Locali/DOCS/Local_AI_Workspace_Assistant_Backlog.md
+#     [ ] D:/Contify/contify/backend/scripts/safe_migrate.py
+#     [ ] C:/Users/User/.bun/install/cache/node-gyp/12.2.0@@@1/gyp/pylib/gyp/xcodeproj_file.py
+#     [ ] C:/Users/User/Downloads/Custom_Local_AI_Assistant_Build_Guide.docx
+#     [ ] C:/Users/User/Downloads/Local_AI_Workspace_Assistant_Backlog.md
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/Artificial Intelligence. A modern approach (Stuart Russell  Peter Norvig) (Z-Library).pdf
+#     [ ] C:/Users/User/Downloads/Local_AI_Workspace_Assistant_Full_SDD.docx
+#     [ ] D:/Locali/DOCS/Local_AI_Workspace_Assistant_Full_SDD.docx
+
+# q002 [exact_term]  CHUNK_OVERLAP
+#   mark relevant files, then copy into the fixture's `relevant:` list
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/Hands-On Large Language Models Language Understanding and Generation (Jay Alammar, Maarten Grootendorst) (Z-Library).pdf
+#     [ ] D:/PHOTOS/Family 2022/20230313_180315.jpg
+#     [ ] D:/PHOTOS/Family 2022/20220629_120141.jpg
+#     [ ] D:/PHOTOS/ATIC Memories/IMG_E0326.JPG
+#     [ ] D:/PHOTOS/New folder/EGY/WhatsApp Image 2025-12-16 at 7.25.27 PM (1).jpeg
+#     [ ] D:/PFE/Contify/contify/backend/app/services/embedding_service.py
+#     [ ] C:/Users/User/.bun/install/cache/nan/2.27.0@@@1/nan_converters.h
+#     [ ] D:/PHOTOS/Family 2022/20190326_124121.jpg
+#     [ ] D:/Contify/contify/backend/app/services/embedding_service.py
+#     [ ] D:/Locali/ingest.py
+#     [ ] C:/Users/User/.bun/install/cache/nan@2.27.0@@@1/nan_converters.h
+#     [ ] D:/PHOTOS/Family 2022/20190326_122850_HDR.jpg
+#     [ ] D:/PHOTOS/Family 2022/20190326_082552_HDR.jpg
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/LLM Engineers Handbook.pdf
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/Hands-On Generative AI with Transformers and Diffusion Models (Omar Sanseviero, Pedro Cuenca etc.) (Z-Library).pdf
+#     [ ] D:/ies/2025_08_15/IMG_6045.JPG
+
+# q003 [semantic]  How does Locali stop the assistant from reading outside the workspace?
+#   mark relevant files, then copy into the fixture's `relevant:` list
+#     [ ] D:/Locali/DOCS/Local_AI_Workspace_Assistant_Full_SDD.docx
+#     [ ] D:/Locali/README.md
+#     [ ] D:/AI Learning/Scikit-Learn/KNN_Project/.idea/workspace.xml
+#     [ ] D:/Locali/DOCS/Local_AI_Workspace_Assistant_Backlog.md
+
+# q004 [semantic]  Why did we pick Chroma over the alternatives?
+#   mark relevant files, then copy into the fixture's `relevant:` list
+#     [ ] C:/Users/User/Downloads/Local_AI_Workspace_Assistant_Full_SDD.docx
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/Artificial Intelligence. A modern approach (Stuart Russell  Peter Norvig) (Z-Library).pdf
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/Hands-On Large Language Models Language Understanding and Generation (Jay Alammar, Maarten Grootendorst) (Z-Library).pdf
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/Gans-in-action-deep-learning-with-generative-adversarial-networks.pdf
+#     [ ] D:/PFE/Contify/DATASETS/fb-ad-groups.csv
+#     [ ] D:/Locali/DOCS/Local_AI_Workspace_Assistant_Full_SDD.docx
+#     [ ] D:/PFE/Contify/contify/backend/app/services/contichat/command_router.py
+#     [ ] D:/WORK/IEEE/Sessions Photos/2024/YESIST12/IMG_1325.jpg
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/ML/Designing Machine Learning Systems An Iterative Process.pdf
+#     [ ] D:/WORK/IEEE/Conferences/Toolkit/WhatsApp_Image_2025-09-14_à_01.00.51_3d13f0da-removebg-preview.png
+#     [ ] D:/PFE/Contify/DATASETS/fb-ad-groups-crowd-sourced.csv
+#     [ ] D:/Contify/contify/backend/app/services/ai/prompt_enhancer.py
+#     [ ] D:/Books/Social Media Marketing ( PDFDrive ).pdf
+#     [ ] D:/WORK/Aiesec/Toolkit/WhatsApp_Image_2024-03-03_à_21.29.41_855f060d-removebg-preview.png
+
+# q005 [multi_file]  What happens end to end when I ask a question about a document?
+#   mark relevant files, then copy into the fixture's `relevant:` list
+#     [ ] C:/Users/User/Downloads/Adobe Photoshop 2026 (v27.2.0.15) Multilingual/Adobe.Photoshop.2026.u2.Multilingual/Adobe 2026/resources/carousel/carousel.js
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/NLP with Transformer models.pdf
+#     [ ] D:/WORK/ADPP/100_Free_Duck_Pack_Templates/00_MotionDuck Extension/MotionDuck-r75/js/extra/carousel.js
+#     [ ] C:/Users/User/Downloads/Adobe Photoshop 2024 (v25.12) Multilingual/Adobe.Photoshop.2024.u12.Multilingual/Adobe 2024/resources/carousel/carousel.js
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/Artificial Intelligence. A modern approach (Stuart Russell  Peter Norvig) (Z-Library).pdf
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/ML/machine_learning.pdf
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/Hands-On Large Language Models Language Understanding and Generation (Jay Alammar, Maarten Grootendorst) (Z-Library).pdf
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/ML/building-machine-learning-powered-applications-going-from-idea-to-product.pdf
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/LLM Engineers Handbook.pdf
+#     [ ] D:/Contify/contify/backend/scripts/prebake_demo_eval.py
+#     [ ] C:/Users/User/Downloads/Local_AI_Workspace_Assistant_Full_SDD.docx
+#     [ ] D:/Locali/DOCS/Local_AI_Workspace_Assistant_Full_SDD.docx
+#     [ ] D:/Books/Social Media Marketing ( PDFDrive ).pdf
+
+# q006 [multi_file]  Where is the embedding model configured and where is it used?
+#   mark relevant files, then copy into the fixture's `relevant:` list
+#     [ ] D:/Spring boot/easy-note/src/main/java/com/example/easynote/Model/Note.java
+#     [ ] D:/Spring boot/miniproject/src/main/java/com/example/miniproject/model/Product.java
+
+# q007 [absent]  What is Locali's monthly revenue?
+#   mark relevant files, then copy into the fixture's `relevant:` list
+#     [ ] D:/Contify/docs/project_feedback.md
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/ML/Designing Machine Learning Systems An Iterative Process.pdf
+#     [ ] D:/WORK/IEEE/Conferences/Toolkit/WhatsApp_Image_2025-09-14_à_01.00.51_3d13f0da-removebg-preview.png
+#     [ ] C:/Users/User/.docker/scout/sbom/sha256/7d400e340efb42f4d8c9c12c6427adb253f726881a9985d2a471bf0eed824dff/sbom.json
+#     [ ] D:/WORK/IEEE/ATIC-img/swisstransfer_6fe1781a-b10f-43ff-955d-0d8b951a0a11/carte1/IMG_8893.JPG
+#     [ ] D:/WORK/IEEE/TSYP CHALLENGE/TSYP-Challenge-Task-Business-Model FIGHTERS.docx
+#     [ ] D:/WORK/GFX/PNG/143.jpg
+#     [ ] D:/PHOTOS/Family 2022/20230609_100855.jpg
+#     [ ] D:/WORK/IEEE/TSYP CHALLENGE/Revenue and Business Models.pdf
+#     [ ] D:/WORK/IEEE/Sessions Photos/2024/Xtreme18.0/xtreme tssawer/IMG_0495.JPG
+#     [ ] D:/Contify/contify/backend/scripts/seed_advising_ltd.py
+#     [ ] C:/Users/User/Pictures/Screenshots/Screenshot 2026-07-06 185228.png
+#     [ ] D:/WORK/IEEE/Sessions Photos/2024/YESIST12/IMG_1299.jpg
+#     [ ] D:/WORK/IEEE/TSYP CHALLENGE/TSYP-Challenge-Task-Business-Model.docx
+
+# q008 [absent]  Which cloud region does the API deploy to?
+#   mark relevant files, then copy into the fixture's `relevant:` list
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/ML/Designing Machine Learning Systems An Iterative Process.pdf
+#     [ ] C:/Users/User/Downloads/AI_Caravan_Job_Descriptions (1).docx
+#     [ ] C:/Users/User/Downloads/AI_Caravan_Job_Descriptions_v2.docx
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/LLM Engineers Handbook.pdf
+#     [ ] C:/Users/User/Downloads/ML Books-20260613T101427Z-3-001/ML Books/Applied-Machine-Learning-and-AI-for-Engineers.pdf
+#     [ ] C:/Users/User/Downloads/PFE_Trello_Kanban_Board_REVIEWED.md
+#     [ ] C:/Users/User/Downloads/PFE_Trello_Kanban_Board_FINAL.md

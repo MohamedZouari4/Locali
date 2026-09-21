@@ -4,7 +4,7 @@ verify the answer's sources include the fixture that actually answers it.
 This hits a real local Ollama server (for embeddings + chat) and a real,
 temporary Chroma store, so it's slower and less deterministic than the unit
 tests in test_tools.py. It's skipped automatically if Ollama or the models
-configured in config.py aren't available.
+configured in app.config aren't available.
 """
 import importlib
 import os
@@ -14,7 +14,7 @@ import unittest
 
 import requests
 
-import config
+import app.config as config
 
 MARKER = "PINEAPPLE-QUASAR-77"
 
@@ -54,9 +54,9 @@ class TestIngestAskCitation(unittest.TestCase):
         # chromadb client/collection at *import time*, so they must be reloaded
         # after patching config for the new paths to take effect. orchestrator.py
         # imports `retrieve` by name from retriever, so it must be reloaded too.
-        import ingest
-        import retriever
-        import orchestrator
+        import app.AI.ingest as ingest
+        import app.AI.retriever as retriever
+        import app.AI.orchestrator as orchestrator
         self.ingest = importlib.reload(ingest)
         self.retriever = importlib.reload(retriever)
         self.orchestrator = importlib.reload(orchestrator)
@@ -64,9 +64,9 @@ class TestIngestAskCitation(unittest.TestCase):
     def tearDown(self):
         config.SCAN_DRIVES = self._orig_scan_drives
         config.VECTOR_DIR = self._orig_vector_dir
-        import ingest
-        import retriever
-        import orchestrator
+        import app.AI.ingest as ingest
+        import app.AI.retriever as retriever
+        import app.AI.orchestrator as orchestrator
         importlib.reload(ingest)
         importlib.reload(retriever)
         importlib.reload(orchestrator)

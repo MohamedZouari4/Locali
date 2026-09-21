@@ -1,0 +1,87 @@
+:root {
+  --font-sans: 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-heading: 'Avenir Next', 'Segoe UI', sans-serif;
+  --mono: ui-monospace, Consolas, monospace;
+
+  font: 14px/145% var(--font-sans);
+  color-scheme: light dark;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (max-width: 1024px) {
+  :root {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  #social .button-icon {
+    filter: invert(1) brightness(2);
+  }
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+#root { min-height: 100svh; }
+
+h1,
+h2 {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+h1 {
+  font-size: 56px;
+  margin: var(--space-8) 0;
+}
+
+h2 {
+  font-size: 24px;
+  line-height: 118%;
+  margin: 0 0 var(--space-1);
+}
+
+@media (max-width: 1024px) {
+  h1 {
+    font-size: 36px;
+    margin: var(--space-5) 0;
+  }
+
+  h2 {
+    font-size: 20px;
+  }
+}
+
+p {
+  margin: 0;
+}
+
+code,
+.counter {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+}
+
+code {
+  font-size: 15px;
+  line-height: 135%;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface);
+}

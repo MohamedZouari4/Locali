@@ -1,0 +1,29 @@
+:root,
+[data-theme="light"] {
+  --color-bg: var(--paper-50);
+  --color-surface: var(--paper-100);
+  --color-border: #D8DAD3;              /* soft divider, decorative — no contrast requirement */
+  --color-border-strong: #84887F;       /* input/button outline — meets 3:1 non-text minimum */
+  --color-text-primary: var(--paper-900);
+  --color-text-secondary: var(--paper-700);
+  --color-accent: var(--moss-600);
+  --color-accent-contrast: var(--paper-50); /* text placed ON an accent-filled chip/button */
+  --color-danger: var(--red-600);
+  --color-focus-ring: var(--moss-600);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]),
+  [data-theme="dark"] {
+  --color-bg: var(--ink-900);
+  --color-surface: var(--ink-700);
+  --color-border: #33363D;
+  --color-border-strong: #666B73;
+  --color-text-primary: var(--ink-100);
+  --color-text-secondary: var(--ink-300);
+  --color-accent: var(--moss-400);
+  --color-accent-contrast: #12231C;
+  --color-danger: var(--red-400);
+  --color-focus-ring: var(--moss-400);
+  }
+}

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import tools
+import app.tool.tools as tools
 
 
 def _make_writable(path):
@@ -29,8 +29,8 @@ class SandboxTestCase(unittest.TestCase):
         self.log_file = os.path.join(self.root, "_logs", "actions.log")
 
         self._patches = [
-            patch("tools.ALLOWED_ROOT", self.root),
-            patch("tools.LOG_FILE", self.log_file),
+            patch("app.tool.tools.ALLOWED_ROOT", self.root),
+            patch("app.tool.tools.LOG_FILE", self.log_file),
         ]
         for p in self._patches:
             p.start()
