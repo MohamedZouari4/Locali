@@ -1,0 +1,23 @@
+:root {
+  /* Neutrals */
+  --ink-900: #1A1C22;   /* dark mode bg */
+  --ink-700: #2A2D33;   /* dark mode surface */
+  --ink-500: #585C64;
+  --ink-300: #B4B8BE;   /* dark mode secondary text */
+  --ink-100: #ECEDE9;   /* dark mode primary text */
+
+  --paper-50:  #F3F4EF; /* light mode bg */
+  --paper-100: #E8E9E3; /* light mode surface */
+  --paper-700: #4B5158; /* light mode secondary text */
+  --paper-900: #20242A; /* light mode primary text */
+
+  /* Accent — moss green, both a role color and the "identity" color */
+  --moss-600: #2F6659;  /* light mode accent (on paper) */
+  --moss-400: #7DBB9C;  /* dark mode accent (on ink) */
+
+  /* Status */
+  --red-600: #B3392F;   /* light mode danger */
+  --red-400: #E38176;   /* dark mode danger */
+  --amber-600: #A66418; /* warning, light — pick similarly and re-check contrast */
+  --amber-400: #D9A25C; /* warning, dark */
+}

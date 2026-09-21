@@ -1,0 +1,12 @@
+{
+  "plugins": ["stylelint-declaration-strict-value"],
+  "ignoreFiles": ["src/styles/tokens/**/*.css"],
+  "rules": {
+    "scale-unlimited/declaration-strict-value": [
+      ["/color$/", "background-color", "border-color"],
+      {
+        "ignoreValues": ["transparent", "inherit", "currentColor"]
+      }
+    ]
+  }
+}

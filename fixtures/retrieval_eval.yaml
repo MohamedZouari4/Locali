@@ -1,0 +1,69 @@
+# LOCALI — retrieval evaluation fixtures
+#
+# Labels are FILE-level, not chunk-level. Chunk IDs are invalidated by every
+# change to CHUNK_SIZE, CHUNK_OVERLAP or the splitter; you still have a chunking
+# experiment and a TOP_K sweep ahead. File paths survive both.
+#
+# Target 30-50 queries. Below ~30 the sign test can't separate a real
+# improvement from a coin flip.
+#
+# Pull queries from things you have actually typed at Locali. Invented queries
+# are systematically cleaner than real ones and will flatter the system.
+#
+# kind:
+#   exact_term  — identifiers, filenames, config keys. BM25 territory.
+#                 Watch these hardest: one correct answer, users notice
+#                 instantly when it's wrong.
+#   semantic    — natural-language questions. Dense-retrieval territory.
+#   multi_file  — answer genuinely spans two or more files.
+#   absent      — the corpus cannot answer this. relevant: []
+#                 Excluded from Hit@k/MRR. These exist to catch confident
+#                 citation of irrelevant sources, which reranking can worsen.
+#
+# Workflow:
+#   1. write the queries, leave `relevant` empty
+#   2. python eval_retrieval.py pool --fixtures this_file.yaml --out pool.txt
+#   3. judge pool.txt (it's shuffled and unlabelled — union of both arms, so
+#      the baseline's blind spots don't become ground truth)
+#   4. fill in `relevant`, then: python eval_retrieval.py run --fixtures ...
+
+- id: q001
+  query: "is_safe_path"
+  kind: exact_term
+  relevant: ["src/tools.py"]
+
+- id: q002
+  query: "CHUNK_OVERLAP"
+  kind: exact_term
+  relevant: ["src/config.py", "src/ingest.py"]
+
+- id: q003
+  query: "How does Locali stop the assistant from reading outside the workspace?"
+  kind: semantic
+  relevant: ["src/tools.py"]
+
+- id: q004
+  query: "Why did we pick Chroma over the alternatives?"
+  kind: semantic
+  relevant: []          # <- if this lives only in Notion, not the indexed tree,
+                        #    it is genuinely absent. Change kind to `absent`.
+
+- id: q005
+  query: "What happens end to end when I ask a question about a document?"
+  kind: multi_file
+  relevant: ["src/orchestrator.py", "src/retriever.py"]
+
+- id: q006
+  query: "Where is the embedding model configured and where is it used?"
+  kind: multi_file
+  relevant: ["src/config.py", "src/ingest.py"]
+
+- id: q007
+  query: "What is Locali's monthly revenue?"
+  kind: absent
+  relevant: []
+
+- id: q008
+  query: "Which cloud region does the API deploy to?"
+  kind: absent
+  relevant: []

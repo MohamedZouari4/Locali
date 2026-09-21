@@ -7,3 +7,5 @@ Pillow
 psd-tools
 fastapi
 uvicorn
+rank_bm25
+sentence-transformers
