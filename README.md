@@ -273,7 +273,7 @@ python -m unittest discover -s tests -v
 
 The tests now import the packaged modules, for example `app.config`, `app.AI.ingest`, `app.AI.retriever`, `app.database`, and `app.tool.tools`. Coverage includes file-tool safety, persistence, retrieval/reranking, and an Ollama-dependent ingestion-to-answer integration test.
 
-The integration test requires Ollama and the required models. Retrieval evaluation helpers use [fixtures/retrieval_eval.yaml](fixtures/retrieval_eval.yaml) and [fixtures/retrieval_pool.txt](fixtures/retrieval_pool.txt).
+The integration test requires Ollama and the required models. Retrieval evaluation helpers use [fixtures/retrieval_eval.yaml](fixtures/retrieval_eval.yaml).
 
 Desktop validation:
 
