@@ -3,7 +3,6 @@ import chromadb
 from app.AI.ingest import embed
 from app.config import VECTOR_DIR
 
-
 client = chromadb.PersistentClient(path=VECTOR_DIR)
 collection = client.get_or_create_collection("documents")
 

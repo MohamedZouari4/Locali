@@ -1,16 +1,20 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
 from app.services import tool_service
 from app.services.tool_service import ToolServiceError
 
 router = APIRouter()
 
+
 class MoveFileRequest(BaseModel):
     src: str
     dst: str
 
+
 class OrganizeRequest(BaseModel):
     folder: str
+
 
 @router.post("/files/move")
 def move(req: MoveFileRequest):

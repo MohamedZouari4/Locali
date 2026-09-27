@@ -15,16 +15,18 @@ from __future__ import annotations
 
 import logging
 import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
-from typing import Any, Sequence
+from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
+from typing import Any
 
 from app.config import (
-    RERANK_ENABLED,
-    RERANK_MODEL,
-    RERANK_TOP_N,
-    RERANK_MAX_LENGTH,
     RERANK_BATCH_SIZE,
+    RERANK_ENABLED,
+    RERANK_MAX_LENGTH,
+    RERANK_MODEL,
     RERANK_TIMEOUT_MS,
+    RERANK_TOP_N,
 )
 
 log = logging.getLogger(__name__)

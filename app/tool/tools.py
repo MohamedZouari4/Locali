@@ -1,24 +1,26 @@
-from fileinput import filename
-import os
-import shutil
 import datetime
 import getpass
+import hashlib
+import os
+import shutil
 import socket
 import stat
-import hashlib
+
 from app.config import ALLOWED_ROOT, LOG_FILE
 
 GENESIS_HASH = "0" * 64
 
-def is_safe_path (path):
+
+def is_safe_path(path):
     target = os.path.realpath(path)
     root = os.path.realpath(ALLOWED_ROOT)
     try:
         return os.path.commonpath([target, root]) == root
     except ValueError:
         return False
-    
-def list_files (path="."):
+
+
+def list_files(path="."):
     full_path = os.path.join(ALLOWED_ROOT, path)
     if not is_safe_path(full_path):
         raise PermissionError(f"Access to path '{full_path}' is not allowed.")
@@ -30,14 +32,16 @@ def list_files (path="."):
 
     return os.listdir(full_path)
 
+
 def _last_hash():
     if not os.path.exists(LOG_FILE):
         return GENESIS_HASH
-    with open(LOG_FILE, "r", encoding="utf-8") as f:
+    with open(LOG_FILE, encoding="utf-8") as f:
         lines = f.readlines()
     if not lines or " | hash=" not in lines[-1]:
         return GENESIS_HASH
     return lines[-1].strip().rsplit(" | hash=", 1)[1]
+
 
 def _log(action):
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
@@ -60,21 +64,24 @@ def _log(action):
     # affect the real log, so it's isolated and silently ignored.
     try:
         from app.database import get_connection
+
         conn = get_connection()
         conn.execute(
             "INSERT INTO audit_log (action, target_path, result, success) VALUES (?, ?, ?, ?)",
-            (action, None, action, True)
+            (action, None, action, True),
         )
         conn.commit()
         conn.close()
     except Exception:
         pass
+
+
 def verify_log_integrity():
     """Walk LOG_FILE's hash chain. Returns (True, None) if intact,
     or (False, line_number) for the first line where the chain breaks."""
     if not os.path.exists(LOG_FILE):
         return True, None
-    with open(LOG_FILE, "r", encoding="utf-8") as f:
+    with open(LOG_FILE, encoding="utf-8") as f:
         lines = f.readlines()
     prev_hash = GENESIS_HASH
     for i, raw in enumerate(lines, start=1):
@@ -86,6 +93,7 @@ def verify_log_integrity():
             return False, i
         prev_hash = claimed_hash
     return True, None
+
 
 def move_file(src, dst):
     """Move a file from src to dst, both relative to ALLOWED_ROOT."""
@@ -105,6 +113,7 @@ def move_file(src, dst):
     _log(f"moved '{src}' -> '{dst}'")
     return f"Moved {src} to {dst}"
 
+
 def create_folder(path):
     """Create a folder at the specified path relative to ALLOWED_ROOT."""
     full_path = os.path.join(ALLOWED_ROOT, path)
@@ -115,6 +124,7 @@ def create_folder(path):
     os.makedirs(full_path, exist_ok=True)
     _log(f"created folder '{path}'")
     return f"Folder '{path}' created successfully."
+
 
 def organize_by_extension(folder="."):
     """Organize files in the specified directory by their extensions."""
@@ -134,9 +144,10 @@ def organize_by_extension(folder="."):
             rel_dst = os.path.join(folder, ext, name) if folder != "." else os.path.join(ext, name)
             move_file(rel_src, rel_dst)
             moved += 1
-            
+
     _log(f"organized {moved} files in '{folder}' by extension")
     return f"Files in '{folder}' organized by extension."
+
 
 def find_empty_files(folder="."):
     """List files with zero bytes inside a folder within ALLOWED_ROOT."""
@@ -156,4 +167,3 @@ def find_empty_files(folder="."):
 
     _log(f"searched '{folder}' for empty files, found {len(empty)}")
     return empty
-

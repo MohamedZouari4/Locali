@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import app.tool.tools as tools
+from app.tool import tools
 
 
 def _make_writable(path):
@@ -40,6 +40,7 @@ class SandboxTestCase(unittest.TestCase):
             p.stop()
         _make_writable(self._tmpdir)
         import shutil
+
         shutil.rmtree(self._tmpdir, ignore_errors=True)
 
 
@@ -177,8 +178,8 @@ class TestFindEmptyFiles(SandboxTestCase):
         with self.assertRaises(FileNotFoundError):
             tools.list_files("does_not_exist")
 
-    # TestOrganizeByExtension  
-    def test_missing_dir_raises(self):
+    # TestOrganizeByExtension
+    def test_organize_missing_dir_raises(self):
         with self.assertRaises(NotADirectoryError):
             tools.organize_by_extension("nope")
 

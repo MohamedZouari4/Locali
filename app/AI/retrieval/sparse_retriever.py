@@ -5,7 +5,6 @@ from rank_bm25 import BM25Okapi
 
 from app.config import VECTOR_DIR
 
-
 client = chromadb.PersistentClient(path=VECTOR_DIR)
 collection = client.get_or_create_collection("documents")
 
@@ -87,9 +86,7 @@ def bm25_search(query, pool_size, sources=None):
 
     if sources:
         allowed_sources = set(sources)
-        ranked_ids = [
-            ids[i] for i in ranked if id_to_source[ids[i]] in allowed_sources
-        ][:pool_size]
+        ranked_ids = [ids[i] for i in ranked if id_to_source[ids[i]] in allowed_sources][:pool_size]
     else:
         ranked_ids = [ids[i] for i in ranked[:pool_size]]
 

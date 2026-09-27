@@ -3,20 +3,24 @@ import re
 
 from fastapi import APIRouter, WebSocket
 from pydantic import BaseModel
+
 from app.AI.orchestrator import ask
-from app.services.auth import API_TOKEN
 from app.services import chat_service
+from app.services.auth import API_TOKEN
 
 router = APIRouter()
+
 
 class ChatRequest(BaseModel):
     message: str
     use_docs: bool = False
     project: str | None = None
 
+
 class ChatResponse(BaseModel):
     response: str
     sources: list[str]
+
 
 @router.post("/chat")
 def chat(req: ChatRequest):
@@ -34,10 +38,12 @@ async def chat_stream(websocket: WebSocket):
     try:
         payload = await websocket.receive_json()
         message = payload["message"]
-        is_greeting = bool(re.match(
-            r"^(hi|hello|hey|good morning|good afternoon|good evening)([!,.? ]|$)",
-            message.strip().lower(),
-        ))
+        is_greeting = bool(
+            re.match(
+                r"^(hi|hello|hey|good morning|good afternoon|good evening)([!,.? ]|$)",
+                message.strip().lower(),
+            )
+        )
         answer, sources, _used_tools = await asyncio.to_thread(
             ask,
             message,

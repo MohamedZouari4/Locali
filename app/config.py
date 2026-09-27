@@ -4,10 +4,10 @@ OLLAMA_URL = "http://localhost:11434"
 CHAT_MODEL = "qwen3:4b"
 EMBEDDING_MODEL = "nomic-embed-text:latest"
 
-RERANK_ENABLED    = True
-RERANK_MODEL      = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-RERANK_CANDIDATES = 20     # how wide the hybrid merge fetches
-RERANK_TOP_N      = 5      # what actually reaches the prompt
+RERANK_ENABLED = True
+RERANK_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+RERANK_CANDIDATES = 20  # how wide the hybrid merge fetches
+RERANK_TOP_N = 5  # what actually reaches the prompt
 RERANK_MAX_LENGTH = 512
 RERANK_BATCH_SIZE = 16
 RERANK_TIMEOUT_MS = 3000
@@ -49,27 +49,111 @@ PRIVACY_EXCLUDE = [
 ]
 
 CODE_EXTENSIONS = {
-    "py","js","ts","java","c","cpp","h","css","html",
-    "json","yaml","yml","xml","md","sh","go","rs","php","rb","txt"
+    "py",
+    "js",
+    "ts",
+    "java",
+    "c",
+    "cpp",
+    "h",
+    "css",
+    "html",
+    "json",
+    "yaml",
+    "yml",
+    "xml",
+    "md",
+    "sh",
+    "go",
+    "rs",
+    "php",
+    "rb",
+    "txt",
 }
 
 IGNORE_DIRS = {
-    ".git","node_modules","__pycache__","venv",".venv","dist","build",
-    "AppData","Program Files","Program Files (x86)","Windows","ProgramData",
-    "$RECYCLE.BIN","System Volume Information","site-packages",
-    ".bun",".npm",".cache",".cargo",".nuget",".gradle",".m2",".claude",".codex",
-    ".cagent",".chocolatey",".claude-mem",".config",".cookiecutters",".copilot",
-    ".docker",".dotnet",".github",".ipython",".junie",".local",".matplotlib",
-    ".ms-ad",".ollama",".streamlit",".th-client",".vscode",".vscode-shared",
-    ".ssh","Postman","OneDrive - North American Private University",
+    ".git",
+    "node_modules",
+    "__pycache__",
+    "venv",
+    ".venv",
+    "dist",
+    "build",
+    "AppData",
+    "Program Files",
+    "Program Files (x86)",
+    "Windows",
+    "ProgramData",
+    "$RECYCLE.BIN",
+    "System Volume Information",
+    "site-packages",
+    ".bun",
+    ".npm",
+    ".cache",
+    ".cargo",
+    ".nuget",
+    ".gradle",
+    ".m2",
+    ".claude",
+    ".codex",
+    ".cagent",
+    ".chocolatey",
+    ".claude-mem",
+    ".config",
+    ".cookiecutters",
+    ".copilot",
+    ".docker",
+    ".dotnet",
+    ".github",
+    ".ipython",
+    ".junie",
+    ".local",
+    ".matplotlib",
+    ".ms-ad",
+    ".ollama",
+    ".streamlit",
+    ".th-client",
+    ".vscode",
+    ".vscode-shared",
+    ".ssh",
+    "Postman",
+    "OneDrive - North American Private University",
 }
 
 SENSITIVE_FILES = {".claude.json"}
 
 SKIP_EXTENSIONS = {
-    "sys","exe","dll","msi","bin","dat","iso","img","vhd","vhdx",
-    "so","dylib","lib","obj","class","pyc","node",
-    "zip","rar","7z","gz","tar",
-    "mp3","mp4","mkv","avi","mov","wav","flac",
-    "ttf","otf","woff","woff2",
+    "sys",
+    "exe",
+    "dll",
+    "msi",
+    "bin",
+    "dat",
+    "iso",
+    "img",
+    "vhd",
+    "vhdx",
+    "so",
+    "dylib",
+    "lib",
+    "obj",
+    "class",
+    "pyc",
+    "node",
+    "zip",
+    "rar",
+    "7z",
+    "gz",
+    "tar",
+    "mp3",
+    "mp4",
+    "mkv",
+    "avi",
+    "mov",
+    "wav",
+    "flac",
+    "ttf",
+    "otf",
+    "woff",
+    "woff2",
 }

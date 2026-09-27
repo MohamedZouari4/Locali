@@ -1,20 +1,22 @@
 import json
-import sqlite3
 import os
+import sqlite3
 import uuid
 
-DB_PATH = os.path.abspath('assistant.db')
+DB_PATH = os.path.abspath("assistant.db")
 _initialized = False
+
 
 def get_connection():
     global _initialized
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    conn.execute(f"PRAGMA foreign_keys = ON;")
+    conn.execute("PRAGMA foreign_keys = ON;")
     if not _initialized:
         init_schema(conn)
         _initialized = True
     return conn
+
 
 def init_schema(conn):
     cur = conn.cursor()
@@ -56,49 +58,50 @@ def init_schema(conn):
     conn.commit()
     print(f"Database initialized at {DB_PATH}")
 
+
 def init_db():
     """Initialize the database schema if it doesn't exist."""
-    conn=get_connection()
+    conn = get_connection()
     conn.close()
     print(f"Database initialized at {DB_PATH}")
+
 
 def create_conversation(title=None):
     conn = get_connection()
     conv_id = str(uuid.uuid4())
-    conn.execute(
-        "INSERT INTO conversations (id, title) VALUES (?, ?)",
-        (conv_id, title)
-    )
+    conn.execute("INSERT INTO conversations (id, title) VALUES (?, ?)", (conv_id, title))
     conn.commit()
     conn.close()
     return conv_id
+
 
 def save_conversation(conversation_id, role, messages, sources=None):
     conn = get_connection()
     sources_json = json.dumps(sources) if sources else None
     conn.execute(
         "INSERT INTO messages (conversation_id, role, content, sources) VALUES (?, ?, ?, ?)",
-        (conversation_id, role, messages, sources_json)
+        (conversation_id, role, messages, sources_json),
     )
     conn.commit()
     conn.close()
 
-def get_messages (conversation_id):
+
+def get_messages(conversation_id):
     conn = get_connection()
     cur = conn.execute(
         "SELECT role, content, sources, created_at FROM messages WHERE conversation_id = ? ORDER BY id",
-        (conversation_id,)
+        (conversation_id,),
     ).fetchall()
     conn.close()
     return [dict(row) for row in cur]
 
+
 def list_conversations():
     conn = get_connection()
-    cur = conn.execute(
-        "SELECT id, title, started_at FROM conversations ORDER BY started_at DESC"
-    ).fetchall()
+    cur = conn.execute("SELECT id, title, started_at FROM conversations ORDER BY started_at DESC").fetchall()
     conn.close()
     return [dict(row) for row in cur]
+
 
 if __name__ == "__main__":
     init_db()

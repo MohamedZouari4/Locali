@@ -32,10 +32,11 @@ from pathlib import Path
 # ADAPTER — the only block you should need to edit.
 # Point these at whatever P2-E3-T1/T2 actually named things.
 # ---------------------------------------------------------------------------
-
-from app.AI.retrieval.hybrid_retriever import hybrid_search  # noqa: E402  -> merged candidates
-from app.AI.retrieval.reranker import rerank, warmup  # noqa: E402
-from app.config import RERANK_CANDIDATES  # noqa: E402
+from app.AI.retrieval.hybrid_retriever import (
+    hybrid_search,
+)
+from app.AI.retrieval.reranker import rerank, warmup
+from app.config import RERANK_CANDIDATES
 
 
 def fetch_candidates(query: str, k: int):
@@ -52,15 +53,15 @@ def source_of(candidate) -> str:
     if isinstance(candidate, (tuple, list)):
         raw = candidate[1] if len(candidate) > 1 else ""
     elif isinstance(candidate, dict):
-        raw = (candidate.get("source")
-               or candidate.get("path")
-               or (candidate.get("metadata") or {}).get("source")
-               or (candidate.get("metadata") or {}).get("path")
-               or "")
+        raw = (
+            candidate.get("source")
+            or candidate.get("path")
+            or (candidate.get("metadata") or {}).get("source")
+            or (candidate.get("metadata") or {}).get("path")
+            or ""
+        )
     else:
-        raw = (getattr(candidate, "source", None)
-               or getattr(candidate, "path", None)
-               or "")
+        raw = getattr(candidate, "source", None) or getattr(candidate, "path", None) or ""
     return str(raw).replace("\\", "/").lstrip("./")
 
 
@@ -76,22 +77,21 @@ def text_of(candidate) -> str:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def load_fixtures(path: Path) -> list[dict]:
     raw = path.read_text(encoding="utf-8")
     if path.suffix in (".yaml", ".yml"):
         try:
             import yaml
         except ImportError:
-            sys.exit("pyyaml not installed — python -m pip install pyyaml, "
-                     "or use a .json fixture file")
+            sys.exit("pyyaml not installed — python -m pip install pyyaml, or use a .json fixture file")
         items = yaml.safe_load(raw)
     else:
         items = json.loads(raw)
 
     for item in items:
         item.setdefault("kind", "semantic")
-        item["relevant"] = [str(r).replace("\\", "/").lstrip("./")
-                            for r in item.get("relevant", [])]
+        item["relevant"] = [str(r).replace("\\", "/").lstrip("./") for r in item.get("relevant", [])]
     return items
 
 
@@ -132,6 +132,7 @@ def relevant_ranks(ordering, relevant_files) -> list[int]:
 # Metrics
 # ---------------------------------------------------------------------------
 
+
 def hit_at(ranks: list[int], k: int) -> float:
     return 1.0 if ranks and ranks[0] <= k else 0.0
 
@@ -152,13 +153,14 @@ def sign_test(improved: int, regressed: int) -> float:
     if n == 0:
         return 1.0
     extreme = min(improved, regressed)
-    tail = sum(math.comb(n, i) for i in range(extreme + 1)) / (2 ** n)
+    tail = sum(math.comb(n, i) for i in range(extreme + 1)) / (2**n)
     return min(1.0, 2 * tail)
 
 
 # ---------------------------------------------------------------------------
 # pool — unlabelled candidates for judging
 # ---------------------------------------------------------------------------
+
 
 def cmd_pool(args):
     fixtures = load_fixtures(Path(args.fixtures))
@@ -190,14 +192,17 @@ def cmd_pool(args):
 # run — the comparison
 # ---------------------------------------------------------------------------
 
+
 def cmd_run(args):
     fixtures = load_fixtures(Path(args.fixtures))
     answerable = [f for f in fixtures if f["relevant"]]
     absent = [f for f in fixtures if not f["relevant"]]
 
     if len(answerable) < 30:
-        print(f"! only {len(answerable)} answerable queries — below ~30 you cannot "
-              f"separate an improvement from noise\n", file=sys.stderr)
+        print(
+            f"! only {len(answerable)} answerable queries — below ~30 you cannot separate an improvement from noise\n",
+            file=sys.stderr,
+        )
 
     warmup()
 
@@ -222,17 +227,27 @@ def cmd_run(args):
         base_ranks = relevant_ranks(candidates, item["relevant"])
         rr_ranks = relevant_ranks(reranked, item["relevant"])
 
-        rows.append({
-            "id": item["id"],
-            "kind": item["kind"],
-            "query": item["query"],
-            "base": {"hit1": hit_at(base_ranks, 1), "hit3": hit_at(base_ranks, 3),
-                     "hit5": hit_at(base_ranks, 5), "mrr": reciprocal_rank(base_ranks),
-                     "first_rank": base_ranks[0] if base_ranks else None},
-            "rerank": {"hit1": hit_at(rr_ranks, 1), "hit3": hit_at(rr_ranks, 3),
-                       "hit5": hit_at(rr_ranks, 5), "mrr": reciprocal_rank(rr_ranks),
-                       "first_rank": rr_ranks[0] if rr_ranks else None},
-        })
+        rows.append(
+            {
+                "id": item["id"],
+                "kind": item["kind"],
+                "query": item["query"],
+                "base": {
+                    "hit1": hit_at(base_ranks, 1),
+                    "hit3": hit_at(base_ranks, 3),
+                    "hit5": hit_at(base_ranks, 5),
+                    "mrr": reciprocal_rank(base_ranks),
+                    "first_rank": base_ranks[0] if base_ranks else None,
+                },
+                "rerank": {
+                    "hit1": hit_at(rr_ranks, 1),
+                    "hit3": hit_at(rr_ranks, 3),
+                    "hit5": hit_at(rr_ranks, 5),
+                    "mrr": reciprocal_rank(rr_ranks),
+                    "first_rank": rr_ranks[0] if rr_ranks else None,
+                },
+            }
+        )
 
     if not rows:
         sys.exit("no answerable queries produced results")
@@ -245,22 +260,23 @@ def cmd_run(args):
     unchanged = len(rows) - len(improved) - len(regressed)
     p = sign_test(len(improved), len(regressed))
 
-    print(f"\n{len(rows)} answerable queries · {len(absent)} absent · "
-          f"candidate set {RERANK_CANDIDATES}\n")
+    print(f"\n{len(rows)} answerable queries · {len(absent)} absent · candidate set {RERANK_CANDIDATES}\n")
     print(f"{'metric':<10}{'baseline':>10}{'reranked':>10}{'delta':>10}")
     print("-" * 40)
-    for metric, label in (("hit1", "Hit@1"), ("hit3", "Hit@3"),
-                          ("hit5", "Hit@5"), ("mrr", "MRR")):
+    for metric, label in (
+        ("hit1", "Hit@1"),
+        ("hit3", "Hit@3"),
+        ("hit5", "Hit@5"),
+        ("mrr", "MRR"),
+    ):
         b, r = mean("base", metric), mean("rerank", metric)
         print(f"{label:<10}{b:>10.3f}{r:>10.3f}{r - b:>+10.3f}")
 
     # Recall at the candidate-set size is identical by construction —
     # reranking reorders, it cannot add. Reporting it would be theatre.
 
-    print(f"\nlatency   median {statistics.median(latencies):>6.0f} ms   "
-          f"max {max(latencies):>6.0f} ms")
-    print(f"\nimproved {len(improved)}   regressed {len(regressed)}   "
-          f"unchanged {unchanged}   (sign test p={p:.3f})")
+    print(f"\nlatency   median {statistics.median(latencies):>6.0f} ms   max {max(latencies):>6.0f} ms")
+    print(f"\nimproved {len(improved)}   regressed {len(regressed)}   unchanged {unchanged}   (sign test p={p:.3f})")
     if p > 0.05:
         print("          -> not distinguishable from noise at this sample size")
 
@@ -273,35 +289,45 @@ def cmd_run(args):
         rr = sum(x["rerank"]["hit3"] for x in group) / len(group)
         flag = "  <-- regression" if rr < b else ""
         print(f"  {kind:<14} n={len(group):<4} Hit@3 {b:.2f} -> {rr:.2f}{flag}")
-    print("  exact_term is the one to watch: cross-encoders are trained on prose\n"
-          "  passage ranking and can rank a paragraph ABOUT a function above the\n"
-          "  function itself.")
+    print(
+        "  exact_term is the one to watch: cross-encoders are trained on prose\n"
+        "  passage ranking and can rank a paragraph ABOUT a function above the\n"
+        "  function itself."
+    )
 
     if regressed:
         print("\nregressions:")
-        for r in sorted(regressed, key=lambda x: x["base"]["mrr"] - x["rerank"]["mrr"],
-                        reverse=True):
-            print(f"  {r['id']} [{r['kind']}] rank {r['base']['first_rank']} "
-                  f"-> {r['rerank']['first_rank']}   {r['query'][:60]}")
+        for r in sorted(regressed, key=lambda x: x["base"]["mrr"] - x["rerank"]["mrr"], reverse=True):
+            print(f"  {r['id']} [{r['kind']}] rank {r['base']['first_rank']} -> {r['rerank']['first_rank']}   {r['query'][:60]}")
 
     if absent_scores:
-        print(f"\nabsent queries (excluded from means — nothing to rank).")
+        print("\nabsent queries (excluded from means — nothing to rank).")
         print("  Reranking assigns scores to noise too. Use these to pick an")
         print("  abstention threshold later:")
         for qid, top in absent_scores[:5]:
             print(f"    {qid}  top result: {top or '(none)'}")
 
     if args.json:
-        Path(args.json).write_text(json.dumps({
-            "candidates": RERANK_CANDIDATES,
-            "n_answerable": len(rows),
-            "summary": {m: {"base": mean("base", m), "rerank": mean("rerank", m)}
-                        for m in ("hit1", "hit3", "hit5", "mrr")},
-            "latency_ms": {"median": statistics.median(latencies), "max": max(latencies)},
-            "improved": len(improved), "regressed": len(regressed),
-            "unchanged": unchanged, "sign_test_p": p,
-            "queries": rows,
-        }, indent=2), encoding="utf-8")
+        Path(args.json).write_text(
+            json.dumps(
+                {
+                    "candidates": RERANK_CANDIDATES,
+                    "n_answerable": len(rows),
+                    "summary": {m: {"base": mean("base", m), "rerank": mean("rerank", m)} for m in ("hit1", "hit3", "hit5", "mrr")},
+                    "latency_ms": {
+                        "median": statistics.median(latencies),
+                        "max": max(latencies),
+                    },
+                    "improved": len(improved),
+                    "regressed": len(regressed),
+                    "unchanged": unchanged,
+                    "sign_test_p": p,
+                    "queries": rows,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
         print(f"\nwritten to {args.json}")
 
 

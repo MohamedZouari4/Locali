@@ -1,0 +1,16 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.8
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: desktop-lint
+        name: locali-desktop lint (oxlint + stylelint)
+        entry: npm run lint --prefix locali-desktop
+        language: system
+        files: ^locali-desktop/
+        pass_filenames: false

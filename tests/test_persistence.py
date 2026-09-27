@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import app.database as database
-import app.tool.tools as tools
+from app import database
+from app.tool import tools
 
 
 class PersistenceTestCase(unittest.TestCase):
@@ -31,6 +31,7 @@ class PersistenceTestCase(unittest.TestCase):
         for p in self._patches:
             p.stop()
         import shutil
+
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_conversation_history_is_persisted(self):
@@ -54,9 +55,7 @@ class PersistenceTestCase(unittest.TestCase):
 
         conn = sqlite3.connect(self.db_path)
         try:
-            rows = conn.execute(
-                "SELECT action, success FROM audit_log ORDER BY id DESC LIMIT 1"
-            ).fetchall()
+            rows = conn.execute("SELECT action, success FROM audit_log ORDER BY id DESC LIMIT 1").fetchall()
         finally:
             conn.close()
 

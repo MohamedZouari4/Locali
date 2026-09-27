@@ -1,17 +1,17 @@
 from pathlib import Path
 
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse
-from app.routers import chat, files, ingest_router
-from app.routers import search
+
+from app.routers import chat, files, ingest_router, search
 from app.services.auth_dependency import verify_token
-from app.services.middleware import RequestLoggingMiddleware
 from app.services.error_handlers import global_exception_handler
+from app.services.middleware import RequestLoggingMiddleware
 
 app = FastAPI(
     title="Local AI Workspace Assistant",
     version="1.0",
-    description="A local-first AI assistant with document Q&A and safe file operations."
+    description="A local-first AI assistant with document Q&A and safe file operations.",
 )
 
 app.add_middleware(RequestLoggingMiddleware)

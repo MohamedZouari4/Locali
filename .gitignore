@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 .venv/
+/.pytest_cache/
+/.ruff_cache/
 
 # Data & indexes (contains extracted personal file content — never commit)
 vector_store/

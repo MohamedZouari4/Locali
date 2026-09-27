@@ -1,15 +1,37 @@
-import csv, hashlib, math, os, re, requests, time
+import csv
+import hashlib
+import math
+import os
+import re
+import time
 from pathlib import Path
-from app.config import CODE_EXTENSIONS, EMBEDDING_MODEL, IGNORE_DIRS, OLLAMA_URL, PRIVACY_EXCLUDE, SCAN_DRIVES, SENSITIVE_FILES, SKIP_EXTENSIONS, SYSTEM_EXCLUDE, TESSRACT_PATH, VECTOR_DIR
-from pypdf import PdfReader
-from docx import Document as DocxDocument
-from psd_tools import PSDImage
-from PIL import Image
-import pytesseract
+
 import chromadb
+import pytesseract
+import requests
+from docx import Document as DocxDocument
+from PIL import Image
+from psd_tools import PSDImage
+from pypdf import PdfReader
+
+from app.config import (
+    CODE_EXTENSIONS,
+    EMBEDDING_MODEL,
+    IGNORE_DIRS,
+    OLLAMA_URL,
+    PRIVACY_EXCLUDE,
+    SCAN_DRIVES,
+    SENSITIVE_FILES,
+    SKIP_EXTENSIONS,
+    SYSTEM_EXCLUDE,
+    TESSRACT_PATH,
+    VECTOR_DIR,
+)
 
 try:
-    from langdetect import detect as _langdetect_detect, LangDetectException, DetectorFactory
+    from langdetect import DetectorFactory, LangDetectException
+    from langdetect import detect as _langdetect_detect
+
     DetectorFactory.seed = 0
     _HAS_LANGDETECT = True
 except ImportError:
@@ -28,15 +50,28 @@ ENTROPY_THRESHOLD = 4.0
 
 SOURCE_TYPE_MAP = {
     **{ext: "code" for ext in CODE_EXTENSIONS},
-    "pdf": "document", "docx": "document", "txt": "document", "md": "document",
-    "csv": "tabular", "psd": "design",
-    "jpg": "image", "jpeg": "image", "png": "image", "bmp": "image", "tiff": "image",
+    "pdf": "document",
+    "docx": "document",
+    "txt": "document",
+    "md": "document",
+    "csv": "tabular",
+    "psd": "design",
+    "jpg": "image",
+    "jpeg": "image",
+    "png": "image",
+    "bmp": "image",
+    "tiff": "image",
 }
 
 BINARY_SIGNATURES = {
-    "pdf": (b"%PDF-",), "docx": (b"PK\x03\x04",), "png": (b"\x89PNG\r\n\x1a\n",),
-    "jpg": (b"\xff\xd8\xff",), "jpeg": (b"\xff\xd8\xff",), "bmp": (b"BM",),
-    "tiff": (b"II*\x00", b"MM\x00*"), "psd": (b"8BPS",),
+    "pdf": (b"%PDF-",),
+    "docx": (b"PK\x03\x04",),
+    "png": (b"\x89PNG\r\n\x1a\n",),
+    "jpg": (b"\xff\xd8\xff",),
+    "jpeg": (b"\xff\xd8\xff",),
+    "bmp": (b"BM",),
+    "tiff": (b"II*\x00", b"MM\x00*"),
+    "psd": (b"8BPS",),
 }
 DANGEROUS_SIGNATURES = ((b"MZ", "pe_executable"), (b"\x7fELF", "elf_executable"))
 
@@ -75,18 +110,30 @@ def shannon_entropy(value):
 
 
 def redact_pii(text):
-    hits = {"ssn": 0, "aws_key": 0, "credit_card": 0, "email": 0, "phone": 0, "high_entropy": 0}
+    hits = {
+        "ssn": 0,
+        "aws_key": 0,
+        "credit_card": 0,
+        "email": 0,
+        "phone": 0,
+        "high_entropy": 0,
+    }
 
     def substitute(pattern, label, value):
         def replace(_match):
             hits[label] += 1
             return f"[REDACTED_{label.upper()}]"
+
         return pattern.sub(replace, value)
 
     redacted = text
-    for pattern, label in ((SSN_RE, "ssn"), (AWS_KEY_RE, "aws_key"),
-                           (CREDIT_CARD_RE, "credit_card"), (EMAIL_RE, "email"),
-                           (PHONE_RE, "phone")):
+    for pattern, label in (
+        (SSN_RE, "ssn"),
+        (AWS_KEY_RE, "aws_key"),
+        (CREDIT_CARD_RE, "credit_card"),
+        (EMAIL_RE, "email"),
+        (PHONE_RE, "phone"),
+    ):
         redacted = substitute(pattern, label, redacted)
 
     def redact_secret(match):
@@ -140,29 +187,30 @@ def read_text(filepath):
         return "\n".join(p.text for p in doc.paragraphs)
 
     if ext in ("txt", "md"):
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             return f.read()
 
     if ext == "csv":
         with open(filepath, newline="", encoding="utf-8", errors="ignore") as f:
             return "\n".join(", ".join(row) for row in csv.reader(f))
-        
+
     if ext in CODE_EXTENSIONS:
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             return f.read()
-        
+
     if ext == "psd":
         psd = PSDImage.open(filepath)
         parts = [layer.name for layer in psd if layer.name]
         for layer in psd:
-            if layer.kind == 'type':
+            if layer.kind == "type":
                 parts.append(layer.text)
         return "\n".join(parts)
 
     if ext in ("jpg", "jpeg", "png", "bmp", "tiff"):
         return pytesseract.image_to_string(Image.open(filepath))
-    return None 
-    
+    return None
+
+
 def is_excluded_path(path):
     """True if path falls under any current exclusion rule (system/privacy/ignored dir/skip extension)
     or outside the configured scan roots. Used to prune stale index entries left over from a
@@ -180,9 +228,8 @@ def is_excluded_path(path):
         return True
     if any(part in IGNORE_DIRS for part in norm.split("/")):
         return True
-    if norm.rsplit(".", 1)[-1].lower() in SKIP_EXTENSIONS:
-        return True
-    return False
+    return norm.rsplit(".", 1)[-1].lower() in SKIP_EXTENSIONS
+
 
 def prune_stale(progress_every=2000):
     """Remove index entries whose source file no longer exists or no longer
@@ -204,6 +251,7 @@ def prune_stale(progress_every=2000):
     print(f"Pruned {removed} stale/excluded sources out of {len(checked)} checked")
     return removed
 
+
 def walk_data_dir(scan_drives):
     for drive in scan_drives:
         for dirpath, dirnames, filenames in os.walk(drive):
@@ -221,6 +269,7 @@ def walk_data_dir(scan_drives):
                 if name in SENSITIVE_FILES:
                     continue
                 yield os.path.join(dirpath, name)
+
 
 def make_document_id(content_hash: str) -> str:
     """Return a stable identifier derived from file content."""
@@ -254,7 +303,7 @@ def chunk_by_section(text: str, doc_id: str, source: str, file_type: str, source
     sections, last_end, last_header = [], 0, "GENERAL"
     for match in header_re.finditer(text):
         if match.start() > last_end:
-            sections.append((last_header, text[last_end:match.start()].strip()))
+            sections.append((last_header, text[last_end : match.start()].strip()))
         last_header, last_end = match.group(1).strip(), match.end()
     sections.append((last_header, text[last_end:].strip()))
     sections = [(section, body) for section, body in sections if body]
@@ -270,21 +319,23 @@ def chunk_by_section(text: str, doc_id: str, source: str, file_type: str, source
     source_id = hashlib.sha256(source.encode("utf-8")).hexdigest()[:8]
     chunks = []
     for index, (section, heading_path, body) in enumerate(expanded):
-        chunks.append({
-            "chunk_id": f"{doc_id}_{source_id}_{index:02d}",
-            "document_id": doc_id,
-            "section": section,
-            "heading_path": heading_path,
-            "chunk_index": index,
-            "total_chunks": total,
-            "source": source,
-            "file_type": file_type,
-            "source_type": source_type,
-            "language": detect_language(body, file_type),
-            "sensitivity": None,
-            "token_count": count_tokens(body),
-            "text": body,
-        })
+        chunks.append(
+            {
+                "chunk_id": f"{doc_id}_{source_id}_{index:02d}",
+                "document_id": doc_id,
+                "section": section,
+                "heading_path": heading_path,
+                "chunk_index": index,
+                "total_chunks": total,
+                "source": source,
+                "file_type": file_type,
+                "source_type": source_type,
+                "language": detect_language(body, file_type),
+                "sensitivity": None,
+                "token_count": count_tokens(body),
+                "text": body,
+            }
+        )
     return chunks
 
 
@@ -292,7 +343,7 @@ def store_chunks(chunks, mtime, content_hash):
     """Redact, embed, and persist chunks with their metadata envelope."""
     batch_size = 500
     for start in range(0, len(chunks), batch_size):
-        batch = chunks[start:start + batch_size]
+        batch = chunks[start : start + batch_size]
         redacted_texts = []
         for chunk in batch:
             redacted_text, hits = redact_pii(chunk["text"])
@@ -334,39 +385,50 @@ def replace_source_chunks(source, chunks, mtime, content_hash):
     except Exception:
         collection.delete(where={"source": source})
         if backup["ids"]:
-            collection.add(ids=backup["ids"], documents=backup["documents"],
-                          embeddings=backup["embeddings"], metadatas=backup["metadatas"])
+            collection.add(
+                ids=backup["ids"],
+                documents=backup["documents"],
+                embeddings=backup["embeddings"],
+                metadatas=backup["metadatas"],
+            )
         raise
+
 
 def embed(text):
     last_exc = None
     for attempt in range(1, EMBED_MAX_RETRIES + 1):
         try:
-            resp = requests.post(f"{OLLAMA_URL}/api/embeddings",
-                                 json={"model": EMBEDDING_MODEL, "prompt": text},
-                                 timeout=EMBED_TIMEOUT)
+            resp = requests.post(
+                f"{OLLAMA_URL}/api/embeddings",
+                json={"model": EMBEDDING_MODEL, "prompt": text},
+                timeout=EMBED_TIMEOUT,
+            )
             resp.raise_for_status()
             return resp.json()["embedding"]
         except (requests.exceptions.RequestException, KeyError) as exc:
             last_exc = exc
             if attempt < EMBED_MAX_RETRIES:
-                time.sleep(EMBED_BACKOFF_BASE ** attempt)
+                time.sleep(EMBED_BACKOFF_BASE**attempt)
     raise RuntimeError(f"embed() failed after {EMBED_MAX_RETRIES} attempts") from last_exc
+
 
 def embed_batch(texts):
     last_exc = None
     for attempt in range(1, EMBED_MAX_RETRIES + 1):
         try:
-            resp = requests.post(f"{OLLAMA_URL}/api/embed",
-                                 json={"model": EMBEDDING_MODEL, "input": texts},
-                                 timeout=EMBED_TIMEOUT)
+            resp = requests.post(
+                f"{OLLAMA_URL}/api/embed",
+                json={"model": EMBEDDING_MODEL, "input": texts},
+                timeout=EMBED_TIMEOUT,
+            )
             resp.raise_for_status()
             return resp.json()["embeddings"]
         except (requests.exceptions.RequestException, KeyError) as exc:
             last_exc = exc
             if attempt < EMBED_MAX_RETRIES:
-                time.sleep(EMBED_BACKOFF_BASE ** attempt)
+                time.sleep(EMBED_BACKOFF_BASE**attempt)
     raise RuntimeError(f"embed_batch() failed after {EMBED_MAX_RETRIES} attempts") from last_exc
+
 
 def file_hash(filepath, chunk_size=1024 * 1024):
     """Return the SHA-256 digest of a file without loading it all into memory."""
@@ -380,12 +442,16 @@ def file_hash(filepath, chunk_size=1024 * 1024):
 def search(query_text, n_results=5, source_type=None, file_type=None, sensitivity=None):
     """Search the index with optional metadata filters."""
     conditions = []
-    for key, value in (("source_type", source_type), ("file_type", file_type),
-                       ("sensitivity", sensitivity)):
+    for key, value in (
+        ("source_type", source_type),
+        ("file_type", file_type),
+        ("sensitivity", sensitivity),
+    ):
         if value:
             conditions.append({key: value})
     where = {"$and": conditions} if len(conditions) > 1 else (conditions[0] if conditions else None)
     return collection.query(query_embeddings=[embed(query_text)], n_results=n_results, where=where)
+
 
 def ingest_all(max_size_mb=25, progress_every=500):
     doc_id, indexed, skipped, unchanged, scanned = 0, 0, 0, 0, 0
@@ -395,8 +461,10 @@ def ingest_all(max_size_mb=25, progress_every=500):
         if scanned % progress_every == 0:
             elapsed = time.time() - start_time
             rate = scanned / elapsed
-            print(f"...scanned {scanned} files in {elapsed:.0f}s ({rate:.1f} files/s) "
-                  f"- indexed {indexed}, unchanged {unchanged}, skipped {skipped}")
+            print(
+                f"...scanned {scanned} files in {elapsed:.0f}s ({rate:.1f} files/s) "
+                f"- indexed {indexed}, unchanged {unchanged}, skipped {skipped}"
+            )
 
         if path.lower().rsplit(".", 1)[-1] in SKIP_EXTENSIONS:
             skipped += 1
@@ -419,8 +487,7 @@ def ingest_all(max_size_mb=25, progress_every=500):
 
             content_hash = file_hash(path)
             existing = collection.get(where={"source": source}, limit=1, include=["metadatas"])
-            if (existing["metadatas"]
-                    and existing["metadatas"][0].get("file_hash") == content_hash):
+            if existing["metadatas"] and existing["metadatas"][0].get("file_hash") == content_hash:
                 unchanged += 1
                 continue
 
@@ -429,8 +496,8 @@ def ingest_all(max_size_mb=25, progress_every=500):
             text = read_text(path)
             if text:
                 text = text.encode("utf-8", "ignore").decode("utf-8")
-        except Exception as e:
-            print(f"Skipped {path}: {e}")
+        except Exception as error:
+            print(f"Skipped {path}: {error}")
             skipped += 1
             continue
 
@@ -449,16 +516,21 @@ def ingest_all(max_size_mb=25, progress_every=500):
         print(f"  -> indexed ({len(chunks)} chunks)")
 
     elapsed = time.time() - start_time
-    print(f"Indexed {indexed} files ({doc_id} chunks), skipped {skipped} unsupported/empty/oversized files, "
-          f"{unchanged} unchanged, {scanned} scanned total in {elapsed:.0f}s")
-    
+    print(
+        f"Indexed {indexed} files ({doc_id} chunks), skipped {skipped} unsupported/empty/oversized files, "
+        f"{unchanged} unchanged, {scanned} scanned total in {elapsed:.0f}s"
+    )
+
+
 def reset_index():
     """Delete all documents from the index."""
     collection.delete(where={})
     print("Index reset complete.")
 
+
 if __name__ == "__main__":
     import sys
+
     if "--prune-only" in sys.argv:
         prune_stale()
     elif "--search" in sys.argv:

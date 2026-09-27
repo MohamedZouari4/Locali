@@ -1,5 +1,7 @@
 # Local AI Workspace Assistant
 
+[![CI](https://github.com/MohamedZouari4/Locali/actions/workflows/ci.yml/badge.svg)](https://github.com/MohamedZouari4/Locali/actions/workflows/ci.yml)
+
 A local-first RAG (retrieval-augmented generation) pipeline that indexes files on your machine — documents, code, images, PSDs — into a searchable vector store, then answers questions about them using a locally-hosted LLM via [Ollama](https://ollama.com). No cloud APIs, no data leaves your machine.
 
 The full software design document and development backlog are kept in a local `DOCS/` folder, which is gitignored (not part of this repo).

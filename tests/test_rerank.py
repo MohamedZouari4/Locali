@@ -57,16 +57,15 @@ def ids(results):
 
 # --- ordering -------------------------------------------------------------
 
+
 def test_reorders_by_score(monkeypatch):
-    monkeypatch.setattr(reranker, "_load_model",
-                        lambda: FakeModel([0.1, 0.9, 0.2, 0.5]))
+    monkeypatch.setattr(reranker, "_load_model", lambda: FakeModel([0.1, 0.9, 0.2, 0.5]))
     result = reranker.rerank("q", candidates(4), top_n=4)
     assert ids(result) == ["c1", "c3", "c2", "c0"]
 
 
 def test_truncates_to_top_n(monkeypatch):
-    monkeypatch.setattr(reranker, "_load_model",
-                        lambda: FakeModel([0.1, 0.9, 0.2, 0.5]))
+    monkeypatch.setattr(reranker, "_load_model", lambda: FakeModel([0.1, 0.9, 0.2, 0.5]))
     result = reranker.rerank("q", candidates(4), top_n=2)
     assert ids(result) == ["c1", "c3"]
 
@@ -85,17 +84,16 @@ def test_ties_break_on_chunk_id(monkeypatch):
 
 
 def test_identical_input_gives_identical_output(monkeypatch):
-    monkeypatch.setattr(reranker, "_load_model",
-                        lambda: FakeModel([0.4, 0.4, 0.9, 0.1]))
+    monkeypatch.setattr(reranker, "_load_model", lambda: FakeModel([0.4, 0.4, 0.9, 0.1]))
     first = ids(reranker.rerank("q", candidates(4), top_n=3))
     reranker._model = None
-    monkeypatch.setattr(reranker, "_load_model",
-                        lambda: FakeModel([0.4, 0.4, 0.9, 0.1]))
+    monkeypatch.setattr(reranker, "_load_model", lambda: FakeModel([0.4, 0.4, 0.9, 0.1]))
     second = ids(reranker.rerank("q", candidates(4), top_n=3))
     assert first == second
 
 
 # --- fallback behaviour ---------------------------------------------------
+
 
 def test_disabled_returns_merged_order_without_loading(monkeypatch):
     def explode():
@@ -108,8 +106,11 @@ def test_disabled_returns_merged_order_without_loading(monkeypatch):
 
 
 def test_model_failure_falls_back_to_merged_order(monkeypatch):
-    monkeypatch.setattr(reranker, "_load_model",
-                        lambda: FakeModel([], raises=RuntimeError("no weights")))
+    monkeypatch.setattr(
+        reranker,
+        "_load_model",
+        lambda: FakeModel([], raises=RuntimeError("no weights")),
+    )
     result = reranker.rerank("q", candidates(4), top_n=3)
     assert ids(result) == ["c0", "c1", "c2"]
 
@@ -125,8 +126,7 @@ def test_load_failure_falls_back(monkeypatch):
 
 def test_timeout_falls_back_to_merged_order(monkeypatch):
     monkeypatch.setattr(reranker, "RERANK_TIMEOUT_MS", 50)
-    monkeypatch.setattr(reranker, "_load_model",
-                        lambda: FakeModel([0.1, 0.9, 0.2, 0.5], delay=0.5))
+    monkeypatch.setattr(reranker, "_load_model", lambda: FakeModel([0.1, 0.9, 0.2, 0.5], delay=0.5))
     started = time.perf_counter()
     result = reranker.rerank("q", candidates(4), top_n=2)
     elapsed = time.perf_counter() - started
@@ -139,6 +139,7 @@ def test_empty_candidates():
 
 
 # --- candidate shapes -----------------------------------------------------
+
 
 class Chunk:
     def __init__(self, chunk_id, text):
@@ -175,10 +176,22 @@ def test_real_model_ranks_the_obvious_answer_first():
     in the pair tuples is probably swapped."""
     query = "How does Locali restrict filesystem access?"
     cands = [
-        {"chunk_id": "noise1", "text": "The CLI accepts a --verbose flag for debug logging."},
-        {"chunk_id": "target", "text": "Filesystem operations are restricted to the configured workspace boundary."},
-        {"chunk_id": "noise2", "text": "Embeddings are generated with nomic-embed-text via Ollama."},
-        {"chunk_id": "noise3", "text": "Conversation history persists across sessions in SQLite."},
+        {
+            "chunk_id": "noise1",
+            "text": "The CLI accepts a --verbose flag for debug logging.",
+        },
+        {
+            "chunk_id": "target",
+            "text": "Filesystem operations are restricted to the configured workspace boundary.",
+        },
+        {
+            "chunk_id": "noise2",
+            "text": "Embeddings are generated with nomic-embed-text via Ollama.",
+        },
+        {
+            "chunk_id": "noise3",
+            "text": "Conversation history persists across sessions in SQLite.",
+        },
     ]
     result = reranker.rerank(query, cands, top_n=1)
     assert result[0]["chunk_id"] == "target"
@@ -189,9 +202,13 @@ def test_real_model_latency_is_recorded(capsys):
     """Produces the latency half of EXP-010. Reads as a test so it runs in CI,
     but its output is the point, not its assertion."""
     query = "How does Locali restrict filesystem access?"
-    cands = [{"chunk_id": f"c{i}", "text": "Filesystem operations are restricted "
-                                            "to the configured workspace boundary. " * 4}
-             for i in range(20)]
+    cands = [
+        {
+            "chunk_id": f"c{i}",
+            "text": "Filesystem operations are restricted to the configured workspace boundary. " * 4,
+        }
+        for i in range(20)
+    ]
 
     reranker.warmup()
     timings = []
@@ -202,8 +219,10 @@ def test_real_model_latency_is_recorded(capsys):
 
     timings.sort()
     with capsys.disabled():
-        print(f"\n  rerank of {len(cands)} candidates on CPU: "
-              f"median {timings[len(timings) // 2]:.0f} ms, "
-              f"min {timings[0]:.0f} ms, max {timings[-1]:.0f} ms")
+        print(
+            f"\n  rerank of {len(cands)} candidates on CPU: "
+            f"median {timings[len(timings) // 2]:.0f} ms, "
+            f"min {timings[0]:.0f} ms, max {timings[-1]:.0f} ms"
+        )
 
     assert timings[len(timings) // 2] < reranker.RERANK_TIMEOUT_MS

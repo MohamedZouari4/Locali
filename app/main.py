@@ -1,4 +1,5 @@
 import sys
+
 from app.AI.orchestrator import ask
 from app.database import create_conversation
 
@@ -28,5 +29,3 @@ while True:
     if sources:
         print(f"Sources: {', '.join(sorted(set(sources)))}")
     print()
-
-

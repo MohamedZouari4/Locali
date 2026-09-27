@@ -1,9 +1,11 @@
 import sys
+
 import requests
-import app.database as database
-import app.tool.tools as tools
-from app.config import CHAT_MODEL, OLLAMA_URL
+
+from app import database
 from app.AI.retriever import retrieve
+from app.config import CHAT_MODEL, OLLAMA_URL
+from app.tool import tools
 
 DEBUG = "--debug" in sys.argv
 
@@ -18,12 +20,12 @@ TOOLS_SCHEMA = [
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Path relative to the workspace root. Use '.' for the root itself."
+                        "description": "Path relative to the workspace root. Use '.' for the root itself.",
                     }
                 },
-                "required": []
-            }
-        }
+                "required": [],
+            },
+        },
     },
     {
         "type": "function",
@@ -35,16 +37,16 @@ TOOLS_SCHEMA = [
                 "properties": {
                     "src": {
                         "type": "string",
-                        "description": "Current path of the file, relative to the workspace root."
+                        "description": "Current path of the file, relative to the workspace root.",
                     },
                     "dst": {
                         "type": "string",
-                        "description": "Destination path for the file, relative to the workspace root."
-                    }
+                        "description": "Destination path for the file, relative to the workspace root.",
+                    },
                 },
-                "required": ["src", "dst"]
-            }
-        }
+                "required": ["src", "dst"],
+            },
+        },
     },
     {
         "type": "function",
@@ -56,12 +58,12 @@ TOOLS_SCHEMA = [
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Path of the folder to create, relative to the workspace root."
+                        "description": "Path of the folder to create, relative to the workspace root.",
                     }
                 },
-                "required": ["path"]
-            }
-        }
+                "required": ["path"],
+            },
+        },
     },
     {
         "type": "function",
@@ -73,12 +75,12 @@ TOOLS_SCHEMA = [
                 "properties": {
                     "folder": {
                         "type": "string",
-                        "description": "Path of the folder to organize, relative to the workspace root. Use '.' for the root itself."
+                        "description": "Path of the folder to organize, relative to the workspace root. Use '.' for the root itself.",
                     }
                 },
-                "required": []
-            }
-        }
+                "required": [],
+            },
+        },
     },
     {
         "type": "function",
@@ -90,12 +92,12 @@ TOOLS_SCHEMA = [
                 "properties": {
                     "folder": {
                         "type": "string",
-                        "description": "Path to search, relative to the workspace root. Use '.' for the whole workspace."
+                        "description": "Path to search, relative to the workspace root. Use '.' for the whole workspace.",
                     }
                 },
-                "required": []
-            }
-        }
+                "required": [],
+            },
+        },
     },
 ]
 
@@ -106,6 +108,7 @@ available_tools = {
     "organize_by_extension": tools.organize_by_extension,
     "find_empty_files": tools.find_empty_files,
 }
+
 
 def build_context(query, k=4, project=None):
     # Vector-search the ingested documents for the k chunks most relevant to the query.
@@ -129,6 +132,7 @@ def build_context(query, k=4, project=None):
     context_block = "\n\n---\n\n".join(labeled_chunks)
     return context_block, sources
 
+
 def build_prompt(query, context_block):
     if not context_block:
         # No retrieved context -> fall back to asking the raw question.
@@ -141,6 +145,8 @@ def build_prompt(query, context_block):
         f"{context_block}\n\n"
         f"Question: {query}"
     )
+
+
 def ask(query, use_docs=False, project=None, conversation_id=None):
     SYSTEM_PROMPT = (
         "You are a local assistant with access to tools for file operations: "
@@ -162,10 +168,10 @@ def ask(query, use_docs=False, project=None, conversation_id=None):
         prompt = build_prompt(query, context_block)
     else:
         prompt = query
-    
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": prompt}
+        {"role": "user", "content": prompt},
     ]
 
     if DEBUG:
@@ -175,12 +181,15 @@ def ask(query, use_docs=False, project=None, conversation_id=None):
     MAX_TOOL_ROUNDS = 6
     answer = "Reached the tool-call limit before finishing this request."
     for _ in range(MAX_TOOL_ROUNDS):
-        resp = requests.post(f"{OLLAMA_URL}/api/chat", json={
-            "model": CHAT_MODEL,
-            "messages": messages,
-            "tools": TOOLS_SCHEMA,
-            "stream": False,
-        })
+        resp = requests.post(
+            f"{OLLAMA_URL}/api/chat",
+            json={
+                "model": CHAT_MODEL,
+                "messages": messages,
+                "tools": TOOLS_SCHEMA,
+                "stream": False,
+            },
+        )
         resp.raise_for_status()
         message = resp.json()["message"]
 
@@ -222,4 +231,9 @@ def ask(query, use_docs=False, project=None, conversation_id=None):
             if DEBUG:
                 print(f"[DEBUG] Error saving conversation: {e}")
 
-    return "Reached the tool-call limit before finishing this request.", sources, used_tools, answer
+    return (
+        "Reached the tool-call limit before finishing this request.",
+        sources,
+        used_tools,
+        answer,
+    )

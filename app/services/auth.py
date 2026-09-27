@@ -6,7 +6,7 @@ TOKEN_FILE = os.path.abspath(".auth_token")
 
 def get_or_create_token():
     if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE, "r") as f:
+        with open(TOKEN_FILE) as f:
             return f.read().strip()
 
     token = secrets.token_hex(32)

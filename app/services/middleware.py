@@ -1,6 +1,8 @@
 import time
 import uuid
+
 from starlette.middleware.base import BaseHTTPMiddleware
+
 from app.services.logging_config import logger
 
 
@@ -15,17 +17,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception:
             duration_ms = round((time.time() - start) * 1000, 1)
-            logger.info(
-                f"[{request_id}] {request.method} {request.url.path} "
-                f"- unhandled exception - {duration_ms}ms"
-            )
+            logger.info(f"[{request_id}] {request.method} {request.url.path} - unhandled exception - {duration_ms}ms")
             raise
 
         duration_ms = round((time.time() - start) * 1000, 1)
-        logger.info(
-            f"[{request_id}] {request.method} {request.url.path} "
-            f"- {response.status_code} - {duration_ms}ms"
-        )
+        logger.info(f"[{request_id}] {request.method} {request.url.path} - {response.status_code} - {duration_ms}ms")
         response.headers["X-Request-ID"] = request_id
         return response
-    
