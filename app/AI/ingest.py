@@ -1,3 +1,9 @@
+"""Ingestion pipeline: walks SCAN_DRIVES, extracts text from supported files, redacts PII and secrets,
+splits the text into section chunks, embeds them with Ollama and stores them in ChromaDB.
+
+Run `python -m app.AI.ingest` to ingest then prune stale entries, or pass `--prune-only` or `--search "query"`.
+"""
+
 import csv
 import hashlib
 import math
@@ -237,6 +243,10 @@ def prune_stale(progress_every=2000):
     or a directory it lives under was added to IGNORE_DIRS/PRIVACY_EXCLUDE since
     it was indexed).
     """
+    # Every path counts as excluded when no roots are configured, so pruning would wipe the index.
+    if not SCAN_DRIVES:
+        print("No scan roots configured (SCAN_DRIVES is empty); nothing to prune.")
+        return 0
     checked, removed = set(), 0
     for meta in collection.get(include=["metadatas"])["metadatas"]:
         source = meta["source"]
@@ -454,6 +464,9 @@ def search(query_text, n_results=5, source_type=None, file_type=None, sensitivit
 
 
 def ingest_all(max_size_mb=25, progress_every=500):
+    if not SCAN_DRIVES:
+        print("No scan roots configured (SCAN_DRIVES is empty); nothing to ingest.")
+        return
     doc_id, indexed, skipped, unchanged, scanned = 0, 0, 0, 0, 0
     start_time = time.time()
     for path in walk_data_dir(SCAN_DRIVES):

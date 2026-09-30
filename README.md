@@ -115,24 +115,53 @@ If Tesseract is installed elsewhere, update `TESSRACT_PATH` in [app/config.py](a
 
 ## Configuration
 
-The main configuration is in [app/config.py](app/config.py):
+All settings live in [app/config.py](app/config.py), grouped into four typed dataclasses: `ModelSettings`, `LimitSettings`, `PathSettings` and `PrivacySettings`. To change a default, edit the field in its dataclass. Every setting is also available under its flat name, such as `from app.config import SCAN_DRIVES`, which is what the rest of the code imports.
 
-| Setting | Purpose |
-| --- | --- |
-| `OLLAMA_URL` | Local Ollama HTTP endpoint. |
-| `CHAT_MODEL` | Chat and tool-calling model. |
-| `EMBEDDING_MODEL` | Embedding model. |
-| `RERANK_ENABLED` | Enables cross-encoder reranking behavior. |
-| `RERANK_MODEL` | Sentence Transformers cross-encoder name. |
-| `RERANK_CANDIDATES` / `RERANK_TOP_N` | Candidate and final result counts. |
-| `SCAN_DRIVES` | Roots scanned by ingestion. The current default includes `D:/` and common user folders. |
-| `VECTOR_DIR` | Persistent ChromaDB directory. |
-| `ALLOWED_ROOT` | Workspace boundary for file tools; defaults to `app/AI-Workspace`. |
-| `SYSTEM_EXCLUDE` / `PRIVACY_EXCLUDE` | Absolute paths excluded from scans. |
-| `IGNORE_DIRS` | Directory names skipped during recursive walking. |
-| `SENSITIVE_FILES` / `SKIP_EXTENSIONS` | Files and extensions never ingested. |
+Relative paths are resolved against the directory the process is started from, which is normally the repository root.
 
-Review `SCAN_DRIVES` before the first ingest. The default includes a whole drive and can scan more data than intended. `ALLOWED_ROOT` is a separate safety boundary for file-changing tools and should point to a dedicated workspace folder.
+### Models (`ModelSettings`)
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `OLLAMA_URL` | `http://localhost:11434` | Local Ollama HTTP endpoint. |
+| `CHAT_MODEL` | `qwen3:4b` | Chat and tool-calling model. |
+| `EMBEDDING_MODEL` | `nomic-embed-text:latest` | Embedding model used for ingestion and search. |
+| `RERANK_ENABLED` | `True` | Turns cross-encoder reranking on or off. When off, the merged retrieval order is used as is. |
+| `RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Sentence Transformers cross-encoder used for reranking. |
+
+### Limits (`LimitSettings`)
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `RERANK_CANDIDATES` | `20` | How many hybrid-search results are passed to the reranker. `app/AI/retrieval/retriever.py` currently defines its own copy of this value, so changing it here has no effect yet. |
+| `RERANK_TOP_N` | `5` | How many reranked chunks reach the prompt. |
+| `RERANK_MAX_LENGTH` | `512` | Maximum token length of each query/chunk pair given to the cross-encoder. |
+| `RERANK_BATCH_SIZE` | `16` | Pairs scored per cross-encoder batch. |
+| `RERANK_TIMEOUT_MS` | `3000` | If reranking takes longer than this, the merged order is used instead. |
+
+### Paths (`PathSettings`)
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `DATA_DIR` | `data` | Reserved data directory. No module reads it yet. |
+| `VECTOR_DIR` | `vector_store` | Persistent ChromaDB directory. |
+| `LOG_FILE` | `logs/actions.log` | Tamper-evident, hash-chained log of file-tool actions. |
+| `ALLOWED_ROOT` | `app/AI-Workspace` | Boundary for file-changing tools. Temporary until projects define access. |
+| `TESSRACT_PATH` | `C:/Program Files/Tesseract-OCR/tesseract.exe` | Tesseract binary used for image OCR. |
+
+### Privacy and scan scope (`PrivacySettings`)
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `SCAN_DRIVES` | `[]` (nothing is scanned) | Folders that ingestion walks. |
+| `SYSTEM_EXCLUDE` | 6 Windows system folders, such as `C:/Windows` and `C:/Program Files` | Folders skipped, with everything under them. |
+| `PRIVACY_EXCLUDE` | 5 browser-profile and credential paths, such as `AppData/Local/Google/Chrome` | Any folder whose path contains one of these is skipped. |
+| `IGNORE_DIRS` | 46 names, such as `.git`, `node_modules` and `.ssh`. The full list is in `PrivacySettings`. | Folder names skipped wherever they appear. |
+| `SENSITIVE_FILES` | `.claude.json` | File names that are never ingested. |
+| `CODE_EXTENSIONS` | 20 extensions, such as `py`, `js`, `md` and `txt`. The full list is in `PrivacySettings`. | Extensions treated as code or plain text. |
+| `SKIP_EXTENSIONS` | 33 extensions, such as `exe`, `zip` and `mp4`. The full list is in `PrivacySettings`. | Binary, archive and media extensions that are never ingested. |
+
+The scan scope is empty by default, so a fresh install indexes nothing. To ingest, add folders to `scan_drives` in `PrivacySettings`. While it is empty, ingestion and stale-entry pruning do nothing, so an existing index is left untouched. `ALLOWED_ROOT` is a separate safety boundary for file-changing tools, and it is temporary until projects define access.
 
 On first startup, [app/services/auth.py](app/services/auth.py) creates `.auth_token`. Keep this file local and do not commit it.
 
@@ -291,7 +320,6 @@ npm.cmd run build
 - Some desktop IPC methods are ahead of the backend contracts, including file listing and ingestion fields.
 - Conversation persistence is implemented in SQLite, but the normal successful `ask()` return path does not yet save every turn consistently.
 - Electron Builder currently packages only `dist/` and Electron files. It does not bundle Python, the backend, Tesseract, or Ollama models.
-- The default `SCAN_DRIVES` includes a whole drive. Narrow it before production use and review exclusions carefully.
 - The cross-encoder may download from Hugging Face on first use unless already cached.
 
 See [PROJECT_REVIEW.md](PROJECT_REVIEW.md) for the detailed review, validation results, and recommended delivery order.
