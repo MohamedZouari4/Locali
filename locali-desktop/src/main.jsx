@@ -1,3 +1,5 @@
+// React entry point: loads global styles and design tokens, then mounts <App />.
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'

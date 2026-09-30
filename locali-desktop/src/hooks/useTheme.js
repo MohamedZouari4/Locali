@@ -1,3 +1,5 @@
+// Hook for the light/dark theme: starts from the saved choice or the OS setting and saves changes.
+
 import { useEffect, useState, useCallback } from 'react';
 
 export function useTheme() {

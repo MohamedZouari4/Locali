@@ -1,3 +1,7 @@
+"""Interactive command-line chat. Prefix a question with `doc:` to answer from indexed files.
+Run with `python -m app.main`.
+"""
+
 import sys
 
 from app.AI.orchestrator import ask

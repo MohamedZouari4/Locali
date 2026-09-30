@@ -1,3 +1,5 @@
+"""FastAPI dependency that rejects requests without a valid `Authorization: Bearer <token>` header."""
+
 from fastapi import Header, HTTPException
 
 from app.services.auth import API_TOKEN

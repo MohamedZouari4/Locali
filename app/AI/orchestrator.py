@@ -1,3 +1,9 @@
+"""Answers a user question with the local chat model.
+
+Optionally adds retrieved document context to the prompt, then lets the model call the sandboxed
+file tools (list, move, create folder, organize, find empty files) for up to six rounds.
+"""
+
 import sys
 
 import requests

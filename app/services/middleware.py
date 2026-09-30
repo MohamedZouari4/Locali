@@ -1,3 +1,7 @@
+"""Request logging middleware: logs each request's method, path, status and duration,
+and adds an X-Request-ID response header.
+"""
+
 import time
 import uuid
 

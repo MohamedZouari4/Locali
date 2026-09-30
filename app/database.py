@@ -1,3 +1,7 @@
+"""SQLite persistence (assistant.db): conversations, their messages, and an audit_log table
+that mirrors file-tool actions.
+"""
+
 import json
 import os
 import sqlite3

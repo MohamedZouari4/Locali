@@ -1,3 +1,5 @@
+// One chat message, with source chips that reveal the cited file when clicked.
+
 export function MessageBubble({ message }) {
   const { role, text, isStreaming, sources } = message
 

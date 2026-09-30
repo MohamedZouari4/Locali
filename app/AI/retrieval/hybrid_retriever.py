@@ -1,3 +1,7 @@
+"""Hybrid search: merges dense and BM25 rankings with reciprocal rank fusion.
+Falls back to BM25 alone when the embedding service is unavailable.
+"""
+
 from requests import RequestException
 
 from app.AI.retrieval.dense_retriever import dense_search

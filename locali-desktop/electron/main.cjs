@@ -1,3 +1,6 @@
+// Electron main process: starts the Python API and Ollama if they aren't already running, opens the window,
+// and forwards the renderer's IPC requests (chat, streaming chat, search, ingest, files) to the local API.
+
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');

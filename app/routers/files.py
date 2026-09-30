@@ -1,3 +1,5 @@
+"""File-operation endpoints (/files/move, /files/organize) that map tool errors to HTTP status codes."""
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 

@@ -1,3 +1,10 @@
+"""FastAPI application: registers request logging, the global error handler, and the chat,
+ingestion, search and file routers.
+
+Every route except /health and /favicon.ico requires the bearer token.
+Run with `python -m uvicorn app.api:app`.
+"""
+
 from pathlib import Path
 
 from fastapi import Depends, FastAPI

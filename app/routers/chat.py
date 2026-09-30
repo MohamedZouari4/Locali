@@ -1,3 +1,7 @@
+"""Chat endpoints: POST /chat returns a complete answer. The /chat/stream WebSocket checks the token
+itself, then sends the answer followed by its sources.
+"""
+
 import asyncio
 import re
 

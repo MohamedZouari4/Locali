@@ -1,3 +1,5 @@
+"""Dense (vector) retrieval: embeds the query and searches ChromaDB, optionally limited to a list of sources."""
+
 import chromadb
 
 from app.AI.ingest import embed

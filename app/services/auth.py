@@ -1,3 +1,5 @@
+"""Loads the local API token from .auth_token, generating and saving a new random token on first run."""
+
 import os
 import secrets
 

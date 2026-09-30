@@ -1,3 +1,10 @@
+"""Sandboxed file tools (list, move, create folder, organize by extension, find empty files),
+all restricted to ALLOWED_ROOT.
+
+Every tool except list_files appends an entry to a hash-chained, tamper-evident log (LOG_FILE)
+and mirrors it into the database audit_log.
+"""
+
 import datetime
 import getpass
 import hashlib

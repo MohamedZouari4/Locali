@@ -1,3 +1,5 @@
+"""POST /ingest: runs ingestion, optionally clearing the index first with `full_reset=true`."""
+
 from fastapi import APIRouter
 
 from app.services import rag_service

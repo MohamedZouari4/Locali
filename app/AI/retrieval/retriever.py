@@ -1,3 +1,5 @@
+"""Main retrieval entry point: fetches a wide hybrid candidate pool, then reranks it down to the top `k` chunks."""
+
 from app.AI.retrieval.hybrid_retriever import hybrid_search
 from app.AI.retrieval.reranker import rerank
 

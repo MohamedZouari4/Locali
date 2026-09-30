@@ -1,3 +1,5 @@
+"""Catch-all exception handler: logs the error and returns a generic 500 response."""
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 

@@ -1,3 +1,7 @@
+"""Unit tests for the sandboxed file tools: blocking paths outside ALLOWED_ROOT, each tool's
+behavior and error cases, and action logging. Runs inside a temporary directory.
+"""
+
 import os
 import stat
 import tempfile

@@ -1,3 +1,7 @@
+"""Compatibility entry point so `from app.AI.retriever import retrieve` keeps working
+now that retrieval lives in the `app.AI.retrieval` package.
+"""
+
 import importlib
 
 import app.AI.retrieval.retriever as package_retriever

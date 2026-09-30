@@ -1,3 +1,6 @@
+// Vite build config for the React renderer. In dev it allows the inline styles Vite injects,
+// and `base: './'` lets Electron load the built files from disk.
+
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 

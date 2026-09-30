@@ -1,3 +1,5 @@
+"""GET /search: returns the top matching chunks and their source paths for a query."""
+
 from fastapi import APIRouter
 
 from app.services import rag_service

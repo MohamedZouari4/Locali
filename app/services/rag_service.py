@@ -1,3 +1,5 @@
+"""Service functions for running ingestion and searching the index."""
+
 from app.AI.ingest import ingest_all, reset_index
 from app.AI.retriever import retrieve
 

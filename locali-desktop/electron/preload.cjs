@@ -1,3 +1,5 @@
+// Preload script: exposes the `window.localiAPI` bridge that the React app uses to call the main process over IPC.
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('localiAPI', {

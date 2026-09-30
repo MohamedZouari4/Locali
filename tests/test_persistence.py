@@ -1,3 +1,7 @@
+"""Tests that conversations and file-tool audit entries are saved to SQLite,
+using a temporary database and log file.
+"""
+
 import os
 import sqlite3
 import tempfile

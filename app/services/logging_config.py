@@ -1,3 +1,5 @@
+"""Configures the shared "assistant" logger, which writes JSON-style lines to stdout."""
+
 import logging
 import sys
 

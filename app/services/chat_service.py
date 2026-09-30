@@ -1,3 +1,5 @@
+"""Thin wrapper that turns an orchestrator answer into the /chat response shape."""
+
 from app.AI.orchestrator import ask
 
 

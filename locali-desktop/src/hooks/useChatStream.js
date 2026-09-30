@@ -1,3 +1,5 @@
+// Hook that holds the chat messages and streams assistant replies from the main process over IPC.
+
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 export function useChatStream() {

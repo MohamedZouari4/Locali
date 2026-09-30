@@ -1,3 +1,7 @@
+"""Wraps the file tools for the API, turning permission, not-found and other errors
+into a ToolServiceError that carries an HTTP status code.
+"""
+
 from app.tool import tools
 
 

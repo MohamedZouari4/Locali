@@ -1,3 +1,7 @@
+"""Keyword (BM25) retrieval over the indexed chunks, plus helpers that narrow the search
+to sources whose path matches words in the query or the selected project.
+"""
+
 import re
 
 import chromadb

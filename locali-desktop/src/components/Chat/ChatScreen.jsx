@@ -1,3 +1,6 @@
+// Main chat screen: sidebar, message list, composer with the "Using docs" toggle, and context panel.
+// The sidebar conversations, file counts and context sources are placeholder data for now.
+
 import { useEffect, useState } from 'react'
 import { useChatStream } from '../../hooks/useChatStream'
 import { useTheme } from '../../hooks/useTheme'
