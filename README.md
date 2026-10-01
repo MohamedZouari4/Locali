@@ -318,7 +318,7 @@ npm.cmd run build
 - Ingestion runs synchronously in the API request and has no job ID, progress API, cancellation, or single-flight lock.
 - API-triggered ingestion currently does not automatically prune stale entries.
 - Some desktop IPC methods are ahead of the backend contracts, including file listing and ingestion fields.
-- Conversation persistence is implemented in SQLite, but the normal successful `ask()` return path does not yet save every turn consistently.
+- `ask()` saves each turn to SQLite only when the caller passes a `conversation_id`. The CLI does. The desktop app doesn't yet, because `/chat/stream` never creates or returns a conversation ID.
 - Electron Builder currently packages only `dist/` and Electron files. It does not bundle Python, the backend, Tesseract, or Ollama models.
 - The cross-encoder may download from Hugging Face on first use unless already cached.
 

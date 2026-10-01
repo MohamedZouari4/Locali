@@ -204,7 +204,8 @@ def ask(query, use_docs=False, project=None, conversation_id=None):
 
         tool_calls = message.get("tool_calls")
         if not tool_calls:
-            return message["content"], sources, used_tools
+            answer = message["content"]
+            break
 
         used_tools = True
         messages.append(message)
@@ -237,9 +238,4 @@ def ask(query, use_docs=False, project=None, conversation_id=None):
             if DEBUG:
                 print(f"[DEBUG] Error saving conversation: {e}")
 
-    return (
-        "Reached the tool-call limit before finishing this request.",
-        sources,
-        used_tools,
-        answer,
-    )
+    return answer, sources, used_tools

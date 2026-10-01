@@ -6,9 +6,10 @@ import os
 import sqlite3
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from app import database
+from app.AI import orchestrator
 from app.tool import tools
 
 
@@ -67,6 +68,32 @@ class PersistenceTestCase(unittest.TestCase):
         self.assertTrue(rows)
         self.assertEqual(rows[0][0], "manual audit test")
         self.assertEqual(rows[0][1], 1)
+
+    def _chat_reply(self, message):
+        reply = Mock()
+        reply.json.return_value = {"message": message}
+        return reply
+
+    def test_ask_saves_a_normal_answer(self):
+        conv_id = database.create_conversation(title="ask-test")
+        reply = self._chat_reply({"role": "assistant", "content": "hi there"})
+        with patch.object(orchestrator.requests, "post", return_value=reply):
+            result = orchestrator.ask("hello", conversation_id=conv_id)
+
+        self.assertEqual(result, ("hi there", [], False))
+        saved = [(m["role"], m["content"]) for m in database.get_messages(conv_id)]
+        self.assertEqual(saved, [("user", "hello"), ("assistant", "hi there")])
+
+    def test_ask_returns_three_values_at_the_tool_call_limit(self):
+        conv_id = database.create_conversation(title="ask-limit-test")
+        tool_call = {"function": {"name": "no_such_tool", "arguments": {}}}
+        reply = self._chat_reply({"role": "assistant", "content": "", "tool_calls": [tool_call]})
+        with patch.object(orchestrator.requests, "post", return_value=reply):
+            answer, _sources, used_tools = orchestrator.ask("do something", conversation_id=conv_id)
+
+        self.assertIn("tool-call limit", answer)
+        self.assertTrue(used_tools)
+        self.assertEqual(len(database.get_messages(conv_id)), 2)
 
 
 if __name__ == "__main__":
