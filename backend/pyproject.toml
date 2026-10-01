@@ -1,0 +1,51 @@
+[project]
+name = "locali-backend"
+version = "0.1.0"
+description = "Local-first RAG assistant: FastAPI service, ingestion, retrieval and sandboxed file tools."
+requires-python = ">=3.12"
+dependencies = [
+    "chromadb>=1.5.9",
+    "fastapi>=0.139.0",
+    "pillow>=12.3.0",
+    "psd-tools>=1.17.4",
+    "pypdf>=6.14.2",
+    "pytesseract>=0.3.13",
+    "python-docx>=1.2.0",
+    "rank-bm25>=0.2.2",
+    "requests>=2.34.2",
+    "sentence-transformers>=5.6.1",
+    # Listed directly so it can come from the CPU-only index below (the reranker runs on CPU).
+    "torch>=2.13.0",
+    "uvicorn>=0.50.0",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "pyyaml>=6.0.3",  # scripts/eval_retrieval.py reads YAML fixtures
+    "ruff==0.16.8",  # keep in step with rev in .pre-commit-config.yaml
+]
+
+# The backend is an application run from this folder, not a package to install.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 140
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

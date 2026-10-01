@@ -9,8 +9,8 @@ repos:
   - repo: local
     hooks:
       - id: desktop-lint
-        name: locali-desktop lint (oxlint + stylelint)
-        entry: npm run lint --prefix locali-desktop
+        name: desktop lint (oxlint + stylelint)
+        entry: npm run lint --prefix desktop
         language: system
-        files: ^locali-desktop/
+        files: ^desktop/
         pass_filenames: false

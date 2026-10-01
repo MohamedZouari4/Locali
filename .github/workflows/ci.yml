@@ -9,36 +9,44 @@ on:
 jobs:
   python:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
 
+      # Installs the Python version from backend/.python-version and the locked packages;
+      # fails if uv.lock is out of date with pyproject.toml.
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: uv sync --locked
 
       - name: Lint (ruff check)
-        run: ruff check .
+        run: uv run --locked ruff check .
 
       - name: Format check (ruff format)
-        run: ruff format --check .
+        run: uv run --locked ruff format --check .
 
       - name: Run tests
-        run: pytest -q
+        run: uv run --locked pytest -q
 
   desktop:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: locali-desktop
+        working-directory: desktop
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
 
       - name: Install dependencies
         run: npm ci

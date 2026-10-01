@@ -1,32 +1,22 @@
-# Local AI Workspace Assistant
+# Locali — Local AI Workspace Assistant
 
 [![CI](https://github.com/MohamedZouari4/Locali/actions/workflows/ci.yml/badge.svg)](https://github.com/MohamedZouari4/Locali/actions/workflows/ci.yml)
 
-A local-first RAG (retrieval-augmented generation) pipeline that indexes files on your machine — documents, code, images, PSDs — into a searchable vector store, then answers questions about them using a locally-hosted LLM via [Ollama](https://ollama.com). No cloud APIs, no data leaves your machine.
-
-The full software design document and development backlog are kept in a local `DOCS/` folder, which is gitignored (not part of this repo).
+A local-first RAG (retrieval-augmented generation) assistant that indexes files on your machine — documents, code, images, PSDs — into a searchable vector store, then answers questions about them using a locally hosted LLM via [Ollama](https://ollama.com). No cloud APIs, no data leaves your machine.
 
 ## Features
-## Current status
 
-The project is migrating from the original flat command-line prototype to a packaged Python application with a FastAPI service and an Electron/React desktop client.
-
-The current implementation includes:
-
-- Multi-format ingestion for PDF, DOCX, CSV, text, Markdown, source code, PSD, and common image files.
-- Tesseract OCR for supported images.
-- SHA-256 file hashing and incremental indexing of unchanged files.
+- Multi-format ingestion for PDF, DOCX, CSV, text, Markdown, source code, PSD, and common image files (Tesseract OCR).
+- SHA-256 file hashing and incremental indexing of unchanged files; atomic replacement of a file's chunks.
+- PII and secret redaction before anything is embedded or stored, with a sensitivity label per chunk.
 - Persistent ChromaDB vector storage.
-- Hybrid dense plus BM25 retrieval.
-- Optional local cross-encoder re-ranking through Sentence Transformers.
+- Hybrid dense + BM25 retrieval merged with reciprocal rank fusion, then optional local cross-encoder re-ranking.
 - Project/file-name-aware retrieval filtering.
-- Local Ollama chat and embedding models.
-- Sandboxed tools for listing, moving, creating folders, organizing by extension, and finding empty files.
-- `ALLOWED_ROOT` path validation before file operations.
-- Hash-chained action logging in `logs/actions.log`.
-- FastAPI routes for chat, search, ingestion, and file operations.
+- Local Ollama chat and embedding models; answers stream token by token over a WebSocket.
+- Sandboxed file tools (list, move, create folder, organize by extension, find empty files) restricted to one workspace folder. Tools are withheld whenever file contents are in the prompt.
+- Hash-chained, tamper-evident action log in `logs/actions.log`, mirrored into SQLite.
+- FastAPI routes for chat, search, background ingestion, and file operations, behind a bearer token.
 - SQLite persistence for conversations, messages, and audit records.
-- Bearer-token authentication for the local API and chat WebSocket.
 - Electron/React desktop UI with a context-isolated IPC bridge.
 
 The desktop package is not yet self-contained: it does not bundle the Python runtime, backend, Tesseract, or Ollama models. See [Known limitations](#known-limitations).
@@ -34,90 +24,92 @@ The desktop package is not yet self-contained: it does not bundle the Python run
 ## Architecture
 
 ```text
-Electron + React renderer
+desktop/  Electron + React renderer
             |
             | context-isolated preload IPC
             v
-Electron main process ---- HTTP/WebSocket ----> FastAPI on 127.0.0.1:8000
-            |                                          |
-            | starts local services                    +--> SQLite conversations/audit
-            v                                          |
-Ollama on 127.0.0.1:11434 <-----------------------+
-   qwen3:4b chat                                    v
-   nomic-embed-text embeddings              Retrieval pipeline
-                                                                   Chroma dense search
-                                                                   BM25 sparse search
-                                                                   cross-encoder reranking
-                                                                               |
-                                                                   indexed workspace files
+Electron main process ---- HTTP/WebSocket + token ----> backend/  FastAPI on 127.0.0.1:8000
+            |                                                  |
+            | starts local services                            +--> SQLite: conversations, audit
+            v                                                  |
+Ollama on 127.0.0.1:11434 <-------------------------------+    v
+   qwen3:4b chat                                         Retrieval pipeline
+   nomic-embed-text embeddings                             Chroma dense search
+                                                           BM25 sparse search
+                                                           cross-encoder reranking
+                                                                  |
+                                                       indexed workspace files
 ```
 
-## Project layout
+## Repository layout
 
 ```text
-app/
-   api.py                       FastAPI application
-   config.py                    Models, paths, scan scope, exclusions
-   database.py                  SQLite persistence
-   AI/
-      ingest.py                  Extraction, redaction, chunking, indexing
-      orchestrator.py            RAG prompts and tool-calling loop
-      retriever.py               Retrieval facade
-      retrieval/                 Dense, sparse, hybrid, and reranking modules
-   routers/                     Chat, search, ingest, and file routes
-   services/                    Auth, persistence, logging, and API services
-   tool/tools.py                Sandboxed file operations and action log
-locali-desktop/
-   electron/                    Electron main and preload processes
-   src/                         React renderer and chat UI
-   package.json                 Desktop scripts and dependencies
-tests/                         Unit, persistence, integration, and reranking tests
-fixtures/                      Retrieval evaluation fixtures
-DOCS/                          Backlog and design documents
-PROJECT_REVIEW.md              Engineering review and migration risks
-requirements.txt               Python dependencies
+backend/                         Python backend (run Python commands from here)
+   app/
+      api/                       FastAPI app: main.py, deps.py (token check), middleware.py, errors.py
+         routers/                chat, search, ingest, files
+      core/                      config.py (settings), logging.py, security.py (API token)
+      ai/
+         ingestion/              walker, extractors, redaction, chunking, embeddings, store, pipeline
+         retrieval/              dense, sparse (BM25), hybrid (RRF), reranker, retriever
+         chat/                   orchestrator, prompts, tool_schema
+      services/                  use cases between routers and the AI/tool modules
+      db/                        database.py (SQLite)
+      tools/                     file_tools.py (sandboxed tools), audit_log.py (hash chain)
+      cli.py                     terminal chat
+   tests/                        unit, persistence, store, orchestrator, rerank and integration tests
+      fixtures/                  retrieval evaluation queries
+   scripts/                      eval_retrieval.py (hybrid vs reranked comparison)
+   pyproject.toml                dependencies (uv), ruff and pytest settings
+   uv.lock                       exact versions of every package; commit it
+   .python-version               Python version uv installs (3.12)
+desktop/                         Electron + React client (see desktop/README.md)
+docs/                            Tracked project docs; docs/private/ is gitignored
+.github/workflows/ci.yml         Lint and test on push and pull request
 ```
 
-The former root-level modules such as `config.py`, `ingest.py`, `retriever.py`, `orchestrator.py`, `tools.py`, and `main.py` have been moved into the `app/` package. Imports should use paths such as `app.config`, `app.AI.ingest`, and `app.tool.tools`.
+Runtime data lives in the repository root and is gitignored: `vector_store/`, `assistant.db`, `logs/`, `.auth_token` and `AI-Workspace/`. Paths are resolved from the repository root, so the backend finds them whichever folder it is started from.
 
 ## Requirements
 
-- Python 3.11 or newer.
+- [uv](https://docs.astral.sh/uv/) for Python and its packages. It installs Python 3.12 itself if needed.
 - Node.js and npm for the desktop client.
-- Ollama running locally at `http://127.0.0.1:11434`.
-- Ollama models:
+- Ollama running locally at `http://127.0.0.1:11434` with:
    - `qwen3:4b` for chat and tool calling.
    - `nomic-embed-text:latest` for embeddings.
 - Tesseract OCR for image ingestion. The Windows default is `C:/Program Files/Tesseract-OCR/tesseract.exe`.
 
-Python dependencies are listed in [requirements.txt](requirements.txt), including FastAPI, Uvicorn, ChromaDB, document parsers, `rank_bm25`, and `sentence-transformers`.
-
-## Python setup
-
-From the repository root:
+## Setup
 
 ```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
+cd backend
+uv sync              # creates backend/.venv with the exact versions in uv.lock
+uv run pre-commit install
 
-Install Ollama, then pull the required models:
-
-```powershell
 ollama pull qwen3:4b
 ollama pull nomic-embed-text
 ollama serve
 ```
 
-If Tesseract is installed elsewhere, update `TESSRACT_PATH` in [app/config.py](app/config.py).
+Then choose what to index: add folders to `scan_drives` in `PrivacySettings` in [backend/app/core/config.py](backend/app/core/config.py). It is empty by default, so a fresh install indexes nothing. If Tesseract is installed elsewhere, change `tesseract_path` there too.
+
+### Managing Python packages
+
+Run these from `backend/`. Each one updates `pyproject.toml` and `uv.lock`; commit both.
+
+| Goal | Command |
+| --- | --- |
+| Add a package | `uv add <package>` |
+| Add a dev-only tool | `uv add --dev <package>` |
+| Remove a package | `uv remove <package>` |
+| Upgrade everything within the constraints | `uv lock --upgrade` then `uv sync` |
+| Upgrade one package | `uv lock --upgrade-package <package>` then `uv sync` |
+
+`torch` comes from PyTorch's CPU-only index (set in `pyproject.toml`), because the reranker runs on CPU. This avoids several gigabytes of CUDA libraries.
 
 ## Configuration
 
-All settings live in [app/config.py](app/config.py), grouped into four typed dataclasses: `ModelSettings`, `LimitSettings`, `PathSettings` and `PrivacySettings`. To change a default, edit the field in its dataclass. Every setting is also available under its flat name, such as `from app.config import SCAN_DRIVES`, which is what the rest of the code imports.
-
-Relative paths are resolved against the directory the process is started from, which is normally the repository root.
+All settings live in [backend/app/core/config.py](backend/app/core/config.py), grouped into four typed dataclasses: `ModelSettings`, `LimitSettings`, `PathSettings` and `PrivacySettings`. To change a default, edit the field in its dataclass. Every setting is also available under its flat name, such as `from app.core.config import SCAN_DRIVES`.
 
 ### Models (`ModelSettings`)
 
@@ -125,7 +117,7 @@ Relative paths are resolved against the directory the process is started from, w
 | --- | --- | --- |
 | `OLLAMA_URL` | `http://localhost:11434` | Local Ollama HTTP endpoint. |
 | `CHAT_MODEL` | `qwen3:4b` | Chat and tool-calling model. |
-| `EMBEDDING_MODEL` | `nomic-embed-text:latest` | Embedding model used for ingestion and search. |
+| `EMBEDDING_MODEL` | `nomic-embed-text:latest` | Embedding model used for ingestion and search. Changing it requires a full re-index. |
 | `RERANK_ENABLED` | `True` | Turns cross-encoder reranking on or off. When off, the merged retrieval order is used as is. |
 | `RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Sentence Transformers cross-encoder used for reranking. |
 
@@ -133,205 +125,116 @@ Relative paths are resolved against the directory the process is started from, w
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `RERANK_CANDIDATES` | `20` | How many hybrid-search results are passed to the reranker. `app/AI/retrieval/retriever.py` currently defines its own copy of this value, so changing it here has no effect yet. |
-| `RERANK_TOP_N` | `5` | How many reranked chunks reach the prompt. |
+| `RERANK_CANDIDATES` | `20` | How many hybrid-search results are passed to the reranker. |
+| `RERANK_TOP_N` | `5` | Default number of reranked chunks kept (chat asks for 4). |
 | `RERANK_MAX_LENGTH` | `512` | Maximum token length of each query/chunk pair given to the cross-encoder. |
 | `RERANK_BATCH_SIZE` | `16` | Pairs scored per cross-encoder batch. |
 | `RERANK_TIMEOUT_MS` | `3000` | If reranking takes longer than this, the merged order is used instead. |
 
 ### Paths (`PathSettings`)
 
+All relative to the repository root.
+
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `DATA_DIR` | `data` | Reserved data directory. No module reads it yet. |
-| `VECTOR_DIR` | `vector_store` | Persistent ChromaDB directory. |
+| `VECTOR_DIR` | `vector_store/` | Persistent ChromaDB directory. |
+| `DB_PATH` | `assistant.db` | SQLite database. |
+| `TOKEN_FILE` | `.auth_token` | Local API token, created on first start. Keep it local; never commit it. |
 | `LOG_FILE` | `logs/actions.log` | Tamper-evident, hash-chained log of file-tool actions. |
-| `ALLOWED_ROOT` | `app/AI-Workspace` | Boundary for file-changing tools. Temporary until projects define access. |
-| `TESSRACT_PATH` | `C:/Program Files/Tesseract-OCR/tesseract.exe` | Tesseract binary used for image OCR. |
+| `ALLOWED_ROOT` | `AI-Workspace/` | Boundary for file-changing tools. Temporary until projects define access. |
+| `TESSERACT_PATH` | `C:/Program Files/Tesseract-OCR/tesseract.exe` | Tesseract binary used for image OCR. |
 
 ### Privacy and scan scope (`PrivacySettings`)
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `SCAN_DRIVES` | `[]` (nothing is scanned) | Folders that ingestion walks. |
-| `SYSTEM_EXCLUDE` | 6 Windows system folders, such as `C:/Windows` and `C:/Program Files` | Folders skipped, with everything under them. |
-| `PRIVACY_EXCLUDE` | 5 browser-profile and credential paths, such as `AppData/Local/Google/Chrome` | Any folder whose path contains one of these is skipped. |
-| `IGNORE_DIRS` | 46 names, such as `.git`, `node_modules` and `.ssh`. The full list is in `PrivacySettings`. | Folder names skipped wherever they appear. |
+| `SYSTEM_EXCLUDE` | 6 Windows system folders, such as `C:/Windows` | Folders skipped, with everything under them. |
+| `PRIVACY_EXCLUDE` | 5 browser-profile and credential paths | Any folder whose path contains one of these is skipped. |
+| `IGNORE_DIRS` | 46 names, such as `.git`, `node_modules` and `.ssh` | Folder names skipped wherever they appear. |
 | `SENSITIVE_FILES` | `.claude.json` | File names that are never ingested. |
-| `CODE_EXTENSIONS` | 20 extensions, such as `py`, `js`, `md` and `txt`. The full list is in `PrivacySettings`. | Extensions treated as code or plain text. |
-| `SKIP_EXTENSIONS` | 33 extensions, such as `exe`, `zip` and `mp4`. The full list is in `PrivacySettings`. | Binary, archive and media extensions that are never ingested. |
+| `CODE_EXTENSIONS` | 20 extensions, such as `py`, `js`, `md` and `txt` | Extensions read as code or plain text. |
+| `SKIP_EXTENSIONS` | 33 extensions, such as `exe`, `zip` and `mp4` | Binary, archive and media extensions that are never ingested. |
 
-The scan scope is empty by default, so a fresh install indexes nothing. To ingest, add folders to `scan_drives` in `PrivacySettings`. While it is empty, ingestion and stale-entry pruning do nothing, so an existing index is left untouched. `ALLOWED_ROOT` is a separate safety boundary for file-changing tools, and it is temporary until projects define access.
+While `SCAN_DRIVES` is empty, ingestion and stale-entry pruning do nothing, so an existing index is left untouched.
 
-On first startup, [app/services/auth.py](app/services/auth.py) creates `.auth_token`. Keep this file local and do not commit it.
+## Running
 
-## Running the backend
-
-Start the API from the repository root:
+Backend API, from `backend/`:
 
 ```powershell
-.venv\Scripts\Activate.ps1
-python -m uvicorn app.api:app --host 127.0.0.1 --port 8000
+uv run uvicorn app.api.main:app --host 127.0.0.1 --port 8000
 ```
-
-The API is available at `http://127.0.0.1:8000`.
 
 - Health check: `GET /health`
 - Interactive API documentation: `http://127.0.0.1:8000/docs`
-- OpenAPI schema: `http://127.0.0.1:8000/openapi.json`
 
-All routes except `/health` require:
-
-```text
-Authorization: Bearer <contents of .auth_token>
-```
-
-## Ingestion and retrieval
-
-The ingestion pipeline:
-
-1. Walks every root in `SCAN_DRIVES`.
-2. Skips system, privacy, cache, sensitive, binary, archive, media, and oversized files according to configuration.
-3. Extracts text from supported formats. PSD ingestion includes layer names and text layers; image ingestion uses Tesseract OCR.
-4. Detects common PII and secret-like values and redacts them before embedding.
-5. Splits content into sections and chunks of approximately 4,000 characters.
-6. Embeds chunks through Ollama and stores metadata in ChromaDB.
-7. Uses file hashes and modification metadata to skip unchanged files.
-
-Retrieval combines dense vector results and BM25 keyword results, merges them with reciprocal-rank fusion, and re-ranks candidates with a local cross-encoder when configured. Queries can pass a `project` string to prefer sources whose path contains that value.
-
-Trigger ingestion through the API:
+Desktop app, from `desktop/` (it also starts the API and Ollama if they are not running):
 
 ```powershell
-curl.exe -X POST "http://127.0.0.1:8000/ingest" `
-   -H "Authorization: Bearer <token>"
+npm install
+npm run dev
 ```
 
-Reset the collection before ingesting with `POST /ingest?full_reset=true`.
+Other commands, from `backend/`. `uv run` uses `backend/.venv` and syncs it first, so no activation is needed:
+
+| Goal | Command |
+| --- | --- |
+| Terminal chat (`doc:` prefix searches your files) | `uv run python -m app.cli` (add `--debug` to see prompts and tool calls) |
+| Index, then prune stale entries | `uv run python -m app.ai.ingestion.pipeline` |
+| Prune stale entries only | `uv run python -m app.ai.ingestion.pipeline --prune-only` |
+| Quick search | `uv run python -m app.ai.ingestion.pipeline --search "your words"` |
+| Verify the action log | `uv run python -c "from app.tools.audit_log import verify_log_integrity; print(verify_log_integrity())"` |
+| Retrieval evaluation | `uv run python -m scripts.eval_retrieval run --fixtures tests/fixtures/retrieval_eval.yaml` |
 
 ## API reference
+
+All routes except `/health` require `Authorization: Bearer <contents of .auth_token>`.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | Returns `{ "status": "ok" }`. |
-| `POST` | `/chat` | Accepts `message`, `use_docs`, and optional `project`; returns an answer and sources. |
-| `WS` | `/chat/stream` | Authenticated chat channel that returns the answer, sources, and completion event. |
+| `POST` | `/chat` | Body `message`, `use_docs`, optional `project` and `conversation_id`; returns `response`, `sources`, `conversation_id`. |
+| `WS` | `/chat/stream` | Send `{message, use_docs?, project?, conversation_id?}`; receive `token` events, then one `final` event with `sources` and `conversation_id`, or an `error` event. |
 | `GET` | `/search?q=...&k=4&project=...` | Returns shortened retrieved chunks and source paths. |
-| `POST` | `/ingest` | Runs ingestion; accepts `full_reset` as a query parameter. |
-| `POST` | `/files/move` | Moves a file inside `ALLOWED_ROOT`; body is `{ "src": "...", "dst": "..." }`. |
-| `POST` | `/files/organize` | Sorts immediate files by extension; body is `{ "folder": "..." }`. |
+| `POST` | `/ingest?full_reset=false` | Starts ingestion in the background: `202`, or `409` if a run is in progress. |
+| `GET` | `/ingest/status` | `state` (`idle`, `running`, `done`, `failed`), timestamps, counts or error. |
+| `GET` | `/files?path=.` | Lists a folder inside `ALLOWED_ROOT`. |
+| `POST` | `/files/move` | Moves a file inside `ALLOWED_ROOT`; body `{ "src": "...", "dst": "..." }`. |
+| `POST` | `/files/organize` | Sorts a folder's files by extension; body `{ "folder": "..." }`. |
 
-Example chat request:
-
-```powershell
-curl.exe -X POST "http://127.0.0.1:8000/chat" `
-   -H "Authorization: Bearer <token>" `
-   -H "Content-Type: application/json" `
-   -d '{"message":"Summarize the indexed project notes","use_docs":true}'
-```
-
-## Running the desktop client
-
-Install dependencies:
-
-```powershell
-cd locali-desktop
-npm install
-```
-
-Start Vite and Electron together:
-
-```powershell
-npm run dev
-```
-
-The renderer uses `http://localhost:5173`. Electron connects to the backend on `127.0.0.1:8000` and Ollama on `127.0.0.1:11434`.
-
-| Command | Purpose |
-| --- | --- |
-| `npm run dev:vite` | Start only Vite. |
-| `npm run dev:electron` | Start Electron after Vite is ready. |
-| `npm run dev` | Start Vite and Electron together. |
-| `npm run lint` | Run Oxlint and CSS Stylelint. |
-| `npm run build` | Build the renderer with Vite. |
-| `npm run build:electron` | Build the renderer and invoke Electron Builder. |
-| `npm run preview` | Preview the Vite production build. |
-
-On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`, for example `npm.cmd run lint`.
+Pass the returned `conversation_id` back to continue the same conversation. Both chat routes save every turn to SQLite.
 
 ## File-operation safety
 
-The assistant can call these tools when the user explicitly requests a file operation:
+The assistant can call `list_files`, `move_file`, `create_folder`, `organize_by_extension` and `find_empty_files` when the user asks for a file operation. Tools are not offered when retrieved file contents are in the prompt, so text inside an indexed document cannot trigger a file operation.
 
-- `list_files`
-- `move_file`
-- `create_folder`
-- `organize_by_extension`
-- `find_empty_files`
-
-Tool paths are resolved against `ALLOWED_ROOT`. Traversal paths, absolute paths outside the root, and sibling-prefix escapes are rejected. Successful and blocked operations are recorded in `logs/actions.log` and mirrored into SQLite where applicable.
-
-Verify the hash chain with:
-
-```powershell
-python -c "from app.tool.tools import verify_log_integrity; print(verify_log_integrity())"
-```
-
-The hash chain detects edits, deletions, and reordering after the fact; it does not prevent a process with filesystem access from deleting the log.
-
-## Persistence and generated data
-
-[app/database.py](app/database.py) creates `assistant.db` with tables for conversations, messages, and audit records. The following are local runtime data and should not be committed:
-
-- `.venv/`
-- `.auth_token`
-- `assistant.db`
-- `vector_store/`
-- `logs/`
-- `locali-desktop/node_modules/`, `dist/`, and `release/`
-- Scanned personal files and workspace contents under `app/AI-Workspace/`
+Tool paths are resolved against `ALLOWED_ROOT`. Traversal paths, absolute paths outside the root, and sibling-prefix escapes are rejected. Successful and blocked operations are recorded in `logs/actions.log` and mirrored into the SQLite `audit_log` table with their target path and outcome. The hash chain detects edits, deletions and reordering after the fact; it does not prevent a process with filesystem access from deleting the log.
 
 ## Testing
 
-From the repository root:
+From `backend/`:
 
 ```powershell
-.venv\Scripts\Activate.ps1
-python -m unittest discover -s tests -v
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest -q
 ```
 
-The tests now import the packaged modules, for example `app.config`, `app.AI.ingest`, `app.AI.retriever`, `app.database`, and `app.tool.tools`. Coverage includes file-tool safety, persistence, retrieval/reranking, and an Ollama-dependent ingestion-to-answer integration test.
-
-The integration test requires Ollama and the required models. Retrieval evaluation helpers use [fixtures/retrieval_eval.yaml](fixtures/retrieval_eval.yaml).
-
-Desktop validation:
-
-```powershell
-cd locali-desktop
-npm.cmd run lint
-npm.cmd run build
-```
+The integration test needs Ollama and both models, and is skipped otherwise. To also test the real reranker model, set `RERANK_INTEGRATION=1` before `uv run pytest`. Desktop checks, from `desktop/`: `npm run lint` and `npm run build`. On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`. CI runs the same checks on every push and pull request to `main`; pre-commit runs ruff and the desktop lint locally.
 
 ## Known limitations
 
-- The WebSocket endpoint currently sends the completed answer as one token event; it is not true token streaming.
-- Ingestion runs synchronously in the API request and has no job ID, progress API, cancellation, or single-flight lock.
-- API-triggered ingestion currently does not automatically prune stale entries.
-- Some desktop IPC methods are ahead of the backend contracts, including file listing and ingestion fields.
-- `ask()` saves each turn to SQLite only when the caller passes a `conversation_id`. The CLI does. The desktop app doesn't yet, because `/chat/stream` never creates or returns a conversation ID.
-- Electron Builder currently packages only `dist/` and Electron files. It does not bundle Python, the backend, Tesseract, or Ollama models.
+- Ingestion has no progress percentage or cancel; `GET /ingest/status` reports only state and final counts.
+- The desktop sidebar, file counts and context panel still show placeholder data.
+- Source chips can only reveal files inside the workspace folder; indexed files elsewhere are refused.
+- Electron Builder packages only `dist/` and Electron files. It does not bundle Python, the backend, Tesseract, or Ollama models.
 - The cross-encoder may download from Hugging Face on first use unless already cached.
 
-See [PROJECT_REVIEW.md](PROJECT_REVIEW.md) for the detailed review, validation results, and recommended delivery order.
-
 ## Roadmap
-
-The full backlog is in [DOCS/Local_AI_Workspace_Assistant_Backlog.md](DOCS/Local_AI_Workspace_Assistant_Backlog.md):
 
 1. MVP ingestion, retrieval, chat, and safe file tools.
 2. Backend service, persistence, authentication, and retrieval improvements.
 3. Desktop GUI, settings, search, dashboard, and packaging.
 4. Multi-agent workflows, long-term memory, and automation.
 5. Permissioned plugin discovery and distribution.
-
-The immediate priority is to finish the package-layout migration, align desktop/backend contracts, fix persistence and indexing identity issues, and add end-to-end desktop workflow tests.

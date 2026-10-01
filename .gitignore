@@ -2,19 +2,22 @@
 __pycache__/
 *.pyc
 .venv/
-/.pytest_cache/
-/.ruff_cache/
+.pytest_cache/
+.ruff_cache/
 
-# Data & indexes (contains extracted personal file content — never commit)
+# Runtime data & indexes (contains extracted personal file content — never commit)
 vector_store/
 data/
+storage/
 AI-Workspace/
 logs/
-DOCS/
+assistant.db
+.auth_token
+*.log
+
+# Private notes and backlog (docs/ itself is tracked)
+docs/private/
 
 # Editor/OS
 .vscode/
 .DS_Store
-.auth_token
-*.log
-assistant.db
