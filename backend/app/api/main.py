@@ -8,8 +8,10 @@ Run from the backend folder with `python -m uvicorn app.api.main:app`.
 import os
 
 from fastapi import Depends, FastAPI
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse
 
+from app import chat_events
 from app.api.deps import verify_token
 from app.api.errors import global_exception_handler
 from app.api.middleware import RequestLoggingMiddleware
@@ -40,3 +42,25 @@ def favicon():
 @app.get("/health", tags=["System"])
 def health():
     return {"status": "ok"}
+
+
+def _openapi_with_chat_events():
+    # FastAPI leaves WebSockets out of OpenAPI, so add the chat event schemas by hand.
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(title=app.title, version=app.version, description=app.description, routes=app.routes)
+    schema.setdefault("components", {}).setdefault("schemas", {}).update(chat_events.openapi_schemas())
+    schema["x-websockets"] = {
+        "/chat/stream": {
+            "subprotocol": chat_events.CHAT_SUBPROTOCOL,
+            "version": chat_events.CHAT_EVENTS_VERSION,
+            "request": {"$ref": "#/components/schemas/ChatStreamRequest"},
+            "events": {"$ref": "#/components/schemas/ChatEvent"},
+            "docs": "docs/CHAT_EVENTS.md",
+        }
+    }
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = _openapi_with_chat_events

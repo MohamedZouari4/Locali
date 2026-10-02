@@ -15,6 +15,7 @@ import requests
 from app.ai.chat.prompts import SYSTEM_PROMPT, TOOL_LIMIT_MESSAGE, build_prompt
 from app.ai.chat.tool_schema import AVAILABLE_TOOLS, TOOLS_SCHEMA
 from app.ai.retrieval import retrieve
+from app.chat_events import DoneEvent, SourcesEvent, TokenEvent
 from app.core.config import CHAT_MODEL, OLLAMA_URL
 from app.db import database
 from app.tools.audit_log import log_action
@@ -157,7 +158,7 @@ def ask_stream(query, use_docs=False, project=None, conversation_id=None):
                 text = message.get("content")
                 if text:
                     parts.append(text)
-                    yield {"type": "token", "text": text}
+                    yield TokenEvent(text=text)
                 if chunk.get("done"):
                     break
 
@@ -169,7 +170,8 @@ def ask_stream(query, use_docs=False, project=None, conversation_id=None):
         _run_tool_calls(tool_calls, messages)
     else:
         # The loop ran out of rounds without a final answer.
-        yield {"type": "token", "text": answer}
+        yield TokenEvent(text=answer)
 
     _save_conversation(conversation_id, query, answer, sources)
-    yield {"type": "final", "sources": sources, "conversation_id": conversation_id}
+    yield SourcesEvent(sources=sources)
+    yield DoneEvent(conversation_id=conversation_id)

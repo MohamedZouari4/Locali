@@ -9,6 +9,7 @@ const WebSocket = require('ws');
 
 const API_BASE_URL = 'http://127.0.0.1:8000'; // loopback only — ADR-015
 const CHAT_STREAM_URL = 'ws://127.0.0.1:8000/chat/stream';
+const CHAT_SUBPROTOCOL = 'locali.chat.v1'; // event contract version, see docs/CHAT_EVENTS.md
 const TOKEN_PATH = path.join(app.getPath('userData'), 'api-token');
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
@@ -145,7 +146,7 @@ ipcMain.handle(
   (event, { message, conversationId, useDocs }) => {
     const token = getAuthToken();
     console.log(`[Locali] Starting chat stream${conversationId ? ` for ${conversationId}` : ''}`);
-    const ws = new WebSocket(CHAT_STREAM_URL, {
+    const ws = new WebSocket(CHAT_STREAM_URL, CHAT_SUBPROTOCOL, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
 
@@ -153,26 +154,37 @@ ipcMain.handle(
       console.log('[Locali] Chat stream connected');
       ws.send(JSON.stringify({ message, conversation_id: conversationId, use_docs: useDocs }));
     });
+    let sources = [];
     ws.on('message', (raw) => {
       let payload;
       try {
         payload = JSON.parse(raw.toString());
       } catch {
-        payload = { type: 'token', text: raw.toString() };
+        console.error('[Locali] Chat stream sent invalid JSON');
+        return;
       }
 
-      if (payload.type === 'final') {
-        console.log('[Locali] Chat stream completed');
-        event.sender.send('api:chat:stream:final', {
-          sources: payload.sources ?? [],
-          toolCalls: payload.tool_calls ?? [],
-          conversationId: payload.conversation_id,
-        });
-      } else if (payload.type === 'error') {
-        console.error(`[Locali] Chat stream backend error: ${payload.text ?? 'unknown error'}`);
-        event.sender.send('api:chat:stream:error', payload.text ?? 'The local API failed');
-      } else {
-        event.sender.send('api:chat:stream:chunk', payload.text ?? '');
+      // Event contract: docs/CHAT_EVENTS.md. Ignore event types this client doesn't handle yet.
+      switch (payload.type) {
+        case 'token':
+          event.sender.send('api:chat:stream:chunk', payload.text ?? '');
+          break;
+        case 'sources':
+          sources = payload.sources ?? [];
+          break;
+        case 'done':
+          console.log('[Locali] Chat stream completed');
+          event.sender.send('api:chat:stream:final', {
+            sources,
+            conversationId: payload.conversation_id,
+          });
+          break;
+        case 'error':
+          console.error(`[Locali] Chat stream backend error: ${payload.text ?? 'unknown error'}`);
+          event.sender.send('api:chat:stream:error', payload.text ?? 'The local API failed');
+          break;
+        default:
+          break;
       }
     });
     ws.on('close', () => {

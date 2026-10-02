@@ -195,7 +195,7 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | --- | --- | --- |
 | `GET` | `/health` | Returns `{ "status": "ok" }`. |
 | `POST` | `/chat` | Body `message`, `use_docs`, optional `project` and `conversation_id`; returns `response`, `sources`, `conversation_id`. |
-| `WS` | `/chat/stream` | Send `{message, use_docs?, project?, conversation_id?}`; receive `token` events, then one `final` event with `sources` and `conversation_id`, or an `error` event. |
+| `WS` | `/chat/stream` | Send `{message, use_docs?, project?, conversation_id?}`; receive `token` events, then `sources` and `done`, or an `error` event. See [docs/CHAT_EVENTS.md](docs/CHAT_EVENTS.md). |
 | `GET` | `/search?q=...&k=4&project=...` | Returns shortened retrieved chunks and source paths. |
 | `POST` | `/ingest?full_reset=false` | Starts ingestion in the background: `202`, or `409` if a run is in progress. |
 | `GET` | `/ingest/status` | `state` (`idle`, `running`, `done`, `failed`), timestamps, counts or error. |
