@@ -12,9 +12,14 @@
     "build:electron": "npm run build && electron-builder",
     "lint": "oxlint && npm run lint:styles",
     "lint:styles": "stylelint \"src/**/*.css\"",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "generate:api": "openapi-typescript electron/api/openapi.json -o electron/api/schema.d.ts",
+    "typecheck": "tsc -p electron/tsconfig.json",
+    "predev": "npm run generate:api",
+    "prebuild": "npm run generate:api"
   },
   "dependencies": {
+    "openapi-fetch": "^0.17.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "ws": "^8.18.3"
@@ -27,15 +32,18 @@
     "cross-env": "^10.1.0",
     "electron": "^43.4.1",
     "electron-builder": "^26.15.3",
+    "openapi-typescript": "^7.13.0",
     "oxlint": "^1.75.0",
     "stylelint": "^17.14.1",
     "stylelint-declaration-strict-value": "^1.11.1",
+    "typescript": "^5.9.3",
     "vite": "^8.2.0",
     "wait-on": "^9.1.0"
   },
   "build": {
     "appId": "com.locali.desktop",
     "productName": "LOCALI",
+    "icon": "electron/icons/icon.png",
     "directories": {
       "output": "release"
     },
@@ -57,7 +65,8 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "icon": "electron/icons/icon.ico"
     }
   }
 }

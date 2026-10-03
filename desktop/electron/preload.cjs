@@ -5,17 +5,14 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('localiAPI', {
   health: () => ipcRenderer.invoke('api:health'),
 
-  chat: (message, conversationId) =>
-    ipcRenderer.invoke('api:chat', { message, conversationId }),
-
-  search: (query) => ipcRenderer.invoke('api:search', { query }),
-
-  ingest: (fullReset = false) => ipcRenderer.invoke('api:ingest', { fullReset }),
-
-  ingestStatus: () => ipcRenderer.invoke('api:ingest:status'),
+  conversations: {
+    list: () => ipcRenderer.invoke('api:conversations:list'),
+    open: (id) => ipcRenderer.invoke('api:conversations:open', { id }),
+    rename: (id, title) => ipcRenderer.invoke('api:conversations:rename', { id, title }),
+    remove: (id) => ipcRenderer.invoke('api:conversations:delete', { id }),
+  },
 
   files: {
-    list: (path) => ipcRenderer.invoke('api:files:list', { path }),
     reveal: (relativePath) =>
       ipcRenderer.invoke('api:files:reveal', { relativePath }),
   },

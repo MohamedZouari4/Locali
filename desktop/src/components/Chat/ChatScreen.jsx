@@ -1,34 +1,36 @@
-// Main chat screen: sidebar, message list, composer with the "Using docs" toggle, and context panel.
-// The sidebar conversations, file counts and context sources are placeholder data for now.
+// Main chat screen: sidebar with saved conversations, message list, and composer with the "Use my docs" toggle.
+// Features without backend support yet (attachments, settings, workspace stats, context panel) are hidden.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useChatStream } from '../../hooks/useChatStream'
+import { useConversations } from '../../hooks/useConversations'
 import { useTheme } from '../../hooks/useTheme'
+import { BrandMark, Icon } from '../Icon'
+import { ConversationList } from './ConversationList'
 import { MessageBubble } from './MessageBubble'
 import './ChatScreen.css'
 
 const suggestions = [
-  { icon: '◌', title: 'Understand my files', text: 'Summarize the documents in my project folder.' },
-  { icon: '⌕', title: 'Find something', text: 'Find files related to my AI research.' },
-  { icon: '⌁', title: 'Fix a problem', text: 'Why is my Python application crashing?' },
-  { icon: '↗', title: 'Understand my code', text: 'Explain how authentication works in this project.' },
+  { icon: 'file', title: 'Understand my files', text: 'Summarize the documents in my project folder.' },
+  { icon: 'search', title: 'Find something', text: 'Find files related to my AI research.' },
+  { icon: 'wrench', title: 'Fix a problem', text: 'Why is my Python application crashing?' },
+  { icon: 'code', title: 'Understand my code', text: 'Explain how authentication works in this project.' },
 ]
 
-const conversations = [
-  { group: 'Today', items: ['Analyze project structure', 'Fix Python environment error'] },
-  { group: 'Yesterday', items: ['Find my PDF about RAG', 'Explain authentication code'] },
-  { group: 'Previous 7 days', items: ['Organize Downloads'] },
-]
+// Below this width the sidebar floats over the chat instead of pushing it aside (matches ChatScreen.css).
+const narrowScreen = '(max-width: 720px)'
 
 export function ChatScreen() {
-  const { messages, sendMessage, retry, stop } = useChatStream()
+  const { messages, conversationId, sendMessage, retry, stop, loadConversation, newChat } = useChatStream()
+  const { conversations, error: conversationsError, refresh, rename, remove } = useConversations()
   const { theme, toggleTheme } = useTheme()
   const [draft, setDraft] = useState('')
   const [useDocs, setUseDocs] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [contextOpen, setContextOpen] = useState(false)
-  const [isDragging, setIsDragging] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(() => !window.matchMedia(narrowScreen).matches)
   const [ollamaReady, setOllamaReady] = useState(false)
+  const scrollRef = useRef(null)
+  const stickToBottom = useRef(true)
+  const textareaRef = useRef(null)
   const isBusy = messages[messages.length - 1]?.isStreaming ?? false
 
   useEffect(() => {
@@ -49,36 +51,163 @@ export function ChatScreen() {
     }
   }, [])
 
+  // The backend saves every turn, so reload the list on start and whenever an answer ends.
+  useEffect(() => {
+    if (!isBusy) refresh()
+  }, [isBusy, refresh])
+
+  // Follow the answer as it streams in, unless the user has scrolled up to read.
+  useLayoutEffect(() => {
+    const element = scrollRef.current
+    if (element && stickToBottom.current && messages.length > 0) element.scrollTop = element.scrollHeight
+  }, [messages])
+
+  const handleScroll = (event) => {
+    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget
+    stickToBottom.current = scrollHeight - scrollTop - clientHeight < 80
+  }
+
+  const closeSidebarOnNarrowScreen = () => {
+    if (window.matchMedia(narrowScreen).matches) setSidebarOpen(false)
+  }
+
+  const startNewChat = () => {
+    if (isBusy) stop()
+    stickToBottom.current = true
+    newChat()
+    setDraft('')
+    closeSidebarOnNarrowScreen()
+    textareaRef.current?.focus()
+  }
+
+  const openConversation = (id) => {
+    if (isBusy) stop()
+    stickToBottom.current = true
+    loadConversation(id).catch(refresh) // it may have been deleted elsewhere
+    closeSidebarOnNarrowScreen()
+  }
+
+  const deleteConversation = async (conversation) => {
+    if (!window.confirm(`Delete "${conversation.title || 'Untitled chat'}"? This can't be undone.`)) return
+    if ((await remove(conversation.id)) && conversation.id === conversationId) startNewChat()
+  }
+
+  const activeTitle = conversationId ? conversations.find((conversation) => conversation.id === conversationId)?.title || 'Untitled chat' : 'New conversation'
+
   const handleSubmit = (event) => {
     event.preventDefault()
     const text = draft.trim()
     if (!text || isBusy) return
+    stickToBottom.current = true
     sendMessage(text, useDocs)
     setDraft('')
   }
 
-  const fillSuggestion = (text) => setDraft(text)
+  const fillSuggestion = (text) => {
+    setDraft(text)
+    textareaRef.current?.focus()
+  }
 
+  // Dropped files are ignored until attachments exist; without this, Electron would open the file in the window.
   return (
-    <main className="chat-screen" onDragEnter={(event) => { event.preventDefault(); setIsDragging(true) }} onDragOver={(event) => event.preventDefault()} onDragLeave={(event) => { if (event.currentTarget === event.target) setIsDragging(false) }} onDrop={(event) => { event.preventDefault(); setIsDragging(false) }}>
-      {isDragging && <div className="drop-overlay"><strong>Drop files to analyze</strong><span>PDF · DOCX · TXT · MD · CSV · Code · Images</span></div>}
-      <header className="topbar">
-        <div className="brand-lockup"><button className="icon-button menu-button" type="button" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Toggle sidebar">☰</button><span className="brand-mark">l<span>•</span></span><div><strong>Locali</strong><small>Personal AI Workspace</small></div></div>
-        <div className="topbar-status"><span className={`status-pill ${ollamaReady ? '' : 'status-pill--offline'}`}><i /> {ollamaReady ? 'Running locally' : 'Ollama unavailable'}</span><span className="model-label">qwen3:4b-instruct</span><span className="workspace-label">My Workspace</span><button className="icon-button" type="button" onClick={toggleTheme} aria-label="Toggle theme">{theme === 'dark' ? '☼' : '☾'}</button><button className="avatar-button" type="button" aria-label="Open application menu">LM</button></div>
-      </header>
-      <div className="workspace-layout">
-        <aside className={`sidebar ${sidebarOpen ? '' : 'sidebar--closed'}`}>
-          <button className="new-chat" type="button" onClick={() => setDraft('')}><span>+</span> New chat <kbd>Ctrl N</kbd></button>
-          <div className="sidebar-section"><div className="section-label"><span>Recent conversations</span><button className="small-icon" type="button" aria-label="Search conversations">⌕</button></div>{conversations.map((section) => <div className="conversation-group" key={section.group}><span className="group-label">{section.group}</span>{section.items.map((item) => <button className="conversation-item" type="button" key={item}>{item}</button>)}</div>)}</div>
-          <div className="sidebar-bottom"><div className="workspace-summary"><span className="workspace-icon">⌂</span><div><strong>My Workspace</strong><span>1,248 files indexed</span><span>12 folders · Local indexing</span></div></div><button className="sidebar-link" type="button"><span>□</span> Workspace</button><button className="sidebar-link" type="button"><span>⚙</span> Settings</button></div>
-        </aside>
-        <section className="chat-column">
-          <div className="conversation-header"><div><span className="eyebrow">PRIVATE WORKSPACE</span><h1>Conversation</h1></div><button className="context-trigger" type="button" onClick={() => setContextOpen(!contextOpen)}><span className="context-dot" /> Workspace context <strong>1,248 files</strong>⌄</button></div>
-          <div className="chat-messages" aria-live="polite">{messages.length === 0 ? <div className="chat-empty"><div className="empty-orbit"><span>l</span></div><h2>What can we work on?</h2><p>Ask about your files, projects, code, or workspace.<br />Everything stays on your device.</p><div className="suggestion-grid">{suggestions.map((suggestion) => <button className="suggestion-card" type="button" key={suggestion.title} onClick={() => fillSuggestion(suggestion.text)}><span className="suggestion-icon">{suggestion.icon}</span><span><strong>{suggestion.title}</strong><small>{suggestion.text}</small></span><b>↗</b></button>)}</div></div> : messages.map((message, index) => <MessageBubble key={message.id} message={message} onRetry={index === messages.length - 1 ? retry : undefined} />)}</div>
-          <div className="composer-wrap"><div className="composer-context"><span className="context-dot" /> {useDocs ? 'Using workspace context' : 'Workspace context off'} <button type="button" onClick={() => setContextOpen(!contextOpen)}>1,248 indexed files</button></div><form className="chat-composer" onSubmit={handleSubmit}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSubmit(event) } }} placeholder="Ask Locali anything about your workspace..." aria-label="Message" disabled={isBusy} rows={2} /><div className="composer-footer"><div className="composer-tools"><button type="button" aria-label="Attach files">＋</button><button type="button">Files</button><button className={useDocs ? 'docs-toggle docs-toggle--active' : 'docs-toggle'} type="button" onClick={() => setUseDocs(!useDocs)} aria-pressed={useDocs}>▣ Using docs</button></div><span className="composer-hint">Shift + Enter for new line</span>{isBusy ? <button className="send-button send-button--stop" type="button" onClick={stop} aria-label="Stop generating">■</button> : <button className="send-button" type="submit" disabled={!draft.trim()} aria-label="Send message">↑</button>}</div></form><span className="privacy-note">Private · Processing on this device</span></div>
-        </section>
-        {contextOpen && <aside className="context-panel"><div className="panel-heading"><div><span className="eyebrow">CURRENT CONTEXT</span><h2>Workspace context</h2></div><button className="small-icon" type="button" onClick={() => setContextOpen(false)} aria-label="Close context panel">×</button></div><div className="context-count"><strong>3</strong><span>sources used in this conversation</span></div><div className="source-list"><button type="button"><span>✓</span> architecture.md <small>Project root</small></button><button type="button"><span>✓</span> project-plan.pdf <small>Documents</small></button><button type="button"><span>✓</span> src/orchestrator.py <small>Source code</small></button></div><div className="panel-task"><span className="eyebrow">CURRENT TASK</span><strong>Ready for your question</strong><span>Locali will search your workspace when context is useful.</span></div><div className="local-card"><span className="status-pill"><i /> Local processing</span><p>Your conversation and indexed workspace stay on this device.</p></div></aside>}
-      </div>
-    </main>
+    <div className={`app-shell ${sidebarOpen ? '' : 'app-shell--collapsed'}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => event.preventDefault()}>
+      <aside className="sidebar" aria-label="Conversations" inert={!sidebarOpen}>
+        <div className="sidebar__inner">
+          <div className="sidebar__brand">
+            <BrandMark />
+            <div>
+              <strong>Locali</strong>
+              <small>Personal AI workspace</small>
+            </div>
+          </div>
+
+          <button className="new-chat" type="button" onClick={startNewChat}>
+            <Icon name="plus" /> New chat
+          </button>
+
+          <nav className="sidebar__list">
+            <ConversationList conversations={conversations} activeId={conversationId} error={conversationsError} onOpen={openConversation} onRename={rename} onDelete={deleteConversation} />
+          </nav>
+
+          <footer className="sidebar__footer">
+            <span className={`status ${ollamaReady ? '' : 'status--offline'}`}>
+              <i aria-hidden="true" /> {ollamaReady ? 'Running locally' : 'Ollama unavailable'}
+            </span>
+            <button className="icon-button" type="button" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title={theme === 'dark' ? 'Light theme' : 'Dark theme'}>
+              <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
+            </button>
+          </footer>
+        </div>
+      </aside>
+      {sidebarOpen && <button className="sidebar-scrim" type="button" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)} />}
+
+      <main className="chat-main">
+        <header className="chat-header">
+          <button className="icon-button" type="button" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'} aria-expanded={sidebarOpen}>
+            <Icon name="sidebar" size={18} />
+          </button>
+          <h1>{activeTitle}</h1>
+          <span className="privacy-badge"><Icon name="lock" size={13} /> On-device</span>
+        </header>
+
+        <div className="chat-scroll" ref={scrollRef} onScroll={handleScroll} aria-live="polite">
+          <div className="chat-thread">
+            {messages.length === 0 ? (
+              <div className="chat-empty">
+                <div className="chat-empty__mark"><BrandMark size={48} /></div>
+                <h2>What can we work on?</h2>
+                <p>Ask about your files, projects, or code. Everything stays on this device.</p>
+                <div className="suggestion-grid">
+                  {suggestions.map((suggestion) => (
+                    <button className="suggestion-card" type="button" key={suggestion.title} onClick={() => fillSuggestion(suggestion.text)}>
+                      <span className="suggestion-card__icon"><Icon name={suggestion.icon} size={17} /></span>
+                      <span className="suggestion-card__text">
+                        <strong>{suggestion.title}</strong>
+                        <small>{suggestion.text}</small>
+                      </span>
+                      <span className="suggestion-card__arrow"><Icon name="arrowUpRight" size={14} /></span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              messages.map((message, index) => <MessageBubble key={message.id} message={message} onRetry={index === messages.length - 1 ? retry : undefined} />)
+            )}
+          </div>
+        </div>
+
+        <div className="composer-wrap">
+          <form className="composer" onSubmit={handleSubmit}>
+            <textarea
+              ref={textareaRef}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  handleSubmit(event)
+                }
+              }}
+              placeholder="Ask Locali anything about your workspace…"
+              aria-label="Message"
+              disabled={isBusy}
+              rows={1}
+            />
+            <div className="composer__footer">
+              <button className={`docs-toggle ${useDocs ? 'docs-toggle--on' : ''}`} type="button" onClick={() => setUseDocs(!useDocs)} aria-pressed={useDocs} title="Answer using the files in your workspace">
+                <Icon name="file" size={15} /> Use my docs
+              </button>
+              <span className="composer__hint"><kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line</span>
+              {isBusy ? (
+                <button className="send-button send-button--stop" type="button" onClick={stop} aria-label="Stop generating"><Icon name="stop" /></button>
+              ) : (
+                <button className="send-button" type="submit" disabled={!draft.trim()} aria-label="Send message"><Icon name="arrowUp" size={18} /></button>
+              )}
+            </div>
+          </form>
+          <p className="composer-note">Private · Processed on this device. Answers can be wrong, so check what matters.</p>
+        </div>
+      </main>
+    </div>
   )
 }

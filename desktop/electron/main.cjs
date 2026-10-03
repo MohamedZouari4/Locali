@@ -1,11 +1,12 @@
 // Electron main process: starts the Python API and Ollama if they aren't already running, opens the window,
-// and forwards the renderer's IPC requests (chat, streaming chat, search, ingest, files) to the local API.
+// and forwards the renderer's IPC requests (streaming chat, conversations, revealing files) to the local API.
 
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { spawn } = require('node:child_process');
 const WebSocket = require('ws');
+const { createApiClient } = require('./api/client.cjs');
 
 const API_BASE_URL = 'http://127.0.0.1:8000'; // loopback only — ADR-015
 const CHAT_STREAM_URL = 'ws://127.0.0.1:8000/chat/stream';
@@ -34,6 +35,16 @@ async function isServiceReady(url) {
   }
 }
 
+// Polls until the service answers or the timeout passes. Returns whether it became ready.
+async function waitForService(url, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await isServiceReady(url)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return false;
+}
+
 function startProcess(command, args, options) {
   const child = spawn(command, args, { ...options, stdio: 'inherit', windowsHide: true });
   child.on('error', (error) => console.error(`[Locali] Could not start ${command}: ${error.message}`));
@@ -58,6 +69,14 @@ async function startLocalServices() {
   } else {
     console.log('[Locali] Ollama already running');
   }
+
+  // Open the window only once both answer, or the renderer's first requests would be refused.
+  const [apiReady, ollamaReady] = await Promise.all([
+    backendProcess ? waitForService(`${API_BASE_URL}/health`) : true,
+    ollamaProcess ? waitForService('http://127.0.0.1:11434/api/tags') : true,
+  ]);
+  if (!apiReady) console.error('[Locali] Local API did not become ready in time');
+  if (!ollamaReady) console.error('[Locali] Ollama did not become ready in time');
 }
 
 function stopLocalServices() {
@@ -67,6 +86,8 @@ function stopLocalServices() {
 
 function createWindow() {
   const window = new BrowserWindow({
+    // Windows draws the .ico sharper in the taskbar; packaged macOS builds take the icon from the app bundle.
+    icon: path.join(__dirname, 'icons', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -81,6 +102,9 @@ function createWindow() {
     window.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
 }
+
+// Without this, Windows groups the window under electron.exe in dev and shows Electron's icon.
+if (process.platform === 'win32') app.setAppUserModelId('com.locali.desktop');
 
 app.whenReady().then(async () => {
   await startLocalServices();
@@ -112,34 +136,13 @@ function getAuthToken() {
   return null;
 }
 
-async function apiFetch(pathname, options = {}) {
-  const token = getAuthToken();
-  const res = await fetch(`${API_BASE_URL}${pathname}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`API ${pathname} failed: ${res.status}`);
-  }
-  return res.json();
-}
+const api = createApiClient(API_BASE_URL, getAuthToken);
 
 // --- Whitelisted IPC channels. Each one wraps exactly one backend call. ---
 ipcMain.handle('api:health', async () => ({
   api: await isServiceReady(`${API_BASE_URL}/health`),
   ollama: await isServiceReady('http://127.0.0.1:11434/api/tags'),
 }));
-
-ipcMain.handle('api:chat', (_event, { message, conversationId }) =>
-  apiFetch('/chat', {
-    method: 'POST',
-    body: JSON.stringify({ message, conversation_id: conversationId }),
-  })
-);
 
 // Only one chat stream runs at a time. Events from any other socket (one the user stopped or
 // replaced) are dropped, so they can't leak into the current answer.
@@ -219,20 +222,13 @@ ipcMain.handle('api:chat:stream:stop', () => {
   closeActiveChatSocket();
 });
 
-ipcMain.handle('api:search', (_event, { query }) =>
-  apiFetch(`/search?q=${encodeURIComponent(query)}`)
-);
+ipcMain.handle('api:conversations:list', () => api.listConversations());
 
-// Starts a background run; poll api:ingest:status for progress. Folders come from scan_drives in the backend config.
-ipcMain.handle('api:ingest', (_event, { fullReset }) =>
-  apiFetch(`/ingest?full_reset=${fullReset ? 'true' : 'false'}`, { method: 'POST' })
-);
+ipcMain.handle('api:conversations:open', (_event, { id }) => api.openConversation(id));
 
-ipcMain.handle('api:ingest:status', () => apiFetch('/ingest/status'));
+ipcMain.handle('api:conversations:rename', (_event, { id, title }) => api.renameConversation(id, title));
 
-ipcMain.handle('api:files:list', (_event, { path: targetPath }) =>
-  apiFetch(`/files?path=${encodeURIComponent(targetPath || '.')}`)
-);
+ipcMain.handle('api:conversations:delete', (_event, { id }) => api.deleteConversation(id));
 
 ipcMain.handle('api:files:reveal', (_event, { relativePath }) => {
   if (typeof relativePath !== 'string') {

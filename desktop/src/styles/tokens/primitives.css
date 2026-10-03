@@ -1,11 +1,14 @@
 :root {
   /* Neutrals */
+  --ink-950: #15171B;   /* dark mode sidebar */
   --ink-900: #1A1C22;   /* dark mode bg */
+  --ink-800: #22252B;   /* dark mode raised surface (composer, cards) */
   --ink-700: #2A2D33;   /* dark mode surface */
   --ink-500: #585C64;
   --ink-300: #B4B8BE;   /* dark mode secondary text */
   --ink-100: #ECEDE9;   /* dark mode primary text */
 
+  --paper-0:   #FBFBF8; /* light mode raised surface (composer, cards) */
   --paper-50:  #F3F4EF; /* light mode bg */
   --paper-100: #E8E9E3; /* light mode surface */
   --paper-700: #4B5158; /* light mode secondary text */
