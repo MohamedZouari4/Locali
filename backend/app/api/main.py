@@ -15,7 +15,7 @@ from app import chat_events
 from app.api.deps import verify_token
 from app.api.errors import global_exception_handler
 from app.api.middleware import RequestLoggingMiddleware
-from app.api.routers import chat, files, ingest, search
+from app.api.routers import chat, conversations, files, ingest, search
 from app.core.config import REPO_ROOT
 
 app = FastAPI(
@@ -28,6 +28,7 @@ app.add_middleware(RequestLoggingMiddleware)
 app.add_exception_handler(Exception, global_exception_handler)
 
 app.include_router(chat.router, tags=["Chat"], dependencies=[Depends(verify_token)])
+app.include_router(conversations.router, tags=["Conversations"], dependencies=[Depends(verify_token)])
 app.include_router(ingest.router, tags=["Ingestion"], dependencies=[Depends(verify_token)])
 app.include_router(search.router, tags=["Search"], dependencies=[Depends(verify_token)])
 app.include_router(files.router, tags=["Files"], dependencies=[Depends(verify_token)])

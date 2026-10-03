@@ -196,6 +196,10 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | `GET` | `/health` | Returns `{ "status": "ok" }`. |
 | `POST` | `/chat` | Body `message`, `use_docs`, optional `project` and `conversation_id`; returns `response`, `sources`, `conversation_id`. |
 | `WS` | `/chat/stream` | Send `{message, use_docs?, project?, conversation_id?}`; receive `token` events, then `sources` and `done`, or an `error` event. See [docs/CHAT_EVENTS.md](docs/CHAT_EVENTS.md). |
+| `GET` | `/conversations` | Past chats, most recently active first: `id`, `title`, `started_at`, `updated_at`, `message_count`. |
+| `GET` | `/conversations/{id}` | One chat with its `messages` (`role`, `content`, `sources`, `status`: `complete`, `incomplete` or `streaming`); `404` if unknown. |
+| `PATCH` | `/conversations/{id}` | Renames a chat; body `{ "title": "..." }` (1–200 characters). |
+| `DELETE` | `/conversations/{id}` | Deletes a chat and its messages; `204`, or `404` if unknown. |
 | `GET` | `/search?q=...&k=4&project=...` | Returns shortened retrieved chunks and source paths. |
 | `POST` | `/ingest?full_reset=false` | Starts ingestion in the background: `202`, or `409` if a run is in progress. |
 | `GET` | `/ingest/status` | `state` (`idle`, `running`, `done`, `failed`), timestamps, counts or error. |

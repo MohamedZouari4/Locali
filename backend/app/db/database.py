@@ -134,18 +134,51 @@ def finish_turn(message_id, content, sources=None, complete=True):
 def get_messages(conversation_id):
     conn = get_connection()
     cur = conn.execute(
-        "SELECT role, content, sources, status, created_at FROM messages WHERE conversation_id = ? ORDER BY id",
+        "SELECT id, role, content, sources, status, created_at FROM messages WHERE conversation_id = ? ORDER BY id",
         (conversation_id,),
     ).fetchall()
     conn.close()
     return [dict(row) for row in cur]
 
 
+# Most recently active first: by the newest message, or the start time for an empty conversation.
+_CONVERSATION_SUMMARY = """
+    SELECT c.id, c.title, c.started_at,
+           COALESCE(MAX(m.created_at), c.started_at) AS updated_at,
+           COUNT(m.id) AS message_count
+    FROM conversations c LEFT JOIN messages m ON m.conversation_id = c.id
+"""
+
+
 def list_conversations():
     conn = get_connection()
-    cur = conn.execute("SELECT id, title, started_at FROM conversations ORDER BY started_at DESC").fetchall()
+    cur = conn.execute(_CONVERSATION_SUMMARY + " GROUP BY c.id ORDER BY updated_at DESC, MAX(m.id) DESC").fetchall()
     conn.close()
     return [dict(row) for row in cur]
+
+
+def get_conversation(conversation_id):
+    """Returns the conversation's summary, or None if it doesn't exist."""
+    conn = get_connection()
+    row = conn.execute(_CONVERSATION_SUMMARY + " WHERE c.id = ? GROUP BY c.id", (conversation_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def rename_conversation(conversation_id, title):
+    """Returns False if the conversation doesn't exist."""
+    with _transaction() as conn:
+        return conn.execute("UPDATE conversations SET title = ? WHERE id = ?", (title, conversation_id)).rowcount > 0
+
+
+def delete_conversation(conversation_id):
+    """Deletes the conversation and everything stored for it. Returns False if it doesn't exist.
+
+    Any new table that stores per-conversation state must be cleared here too.
+    """
+    with _transaction() as conn:
+        conn.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
+        return conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,)).rowcount > 0
 
 
 if __name__ == "__main__":
