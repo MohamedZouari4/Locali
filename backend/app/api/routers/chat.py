@@ -13,8 +13,9 @@ from pydantic import BaseModel
 from starlette.concurrency import iterate_in_threadpool
 
 from app.ai.chat.orchestrator import ask_stream
-from app.chat_events import CHAT_SUBPROTOCOL, ChatStreamRequest, ErrorEvent
+from app.chat_events import CHAT_SUBPROTOCOL, ChatStreamRequest, DoneEvent, ErrorEvent, SourcesEvent, TokenEvent
 from app.core.security import is_valid_token
+from app.db import database
 from app.services import chat_service
 
 router = APIRouter()
@@ -60,20 +61,26 @@ async def chat_stream(websocket: WebSocket):
 
     await websocket.accept(subprotocol=CHAT_SUBPROTOCOL if requested else None)
     events = None
+    reply_id = None
+    parts = []
+    sources = None
     try:
         request = ChatStreamRequest.model_validate(await websocket.receive_json())
         is_greeting = bool(GREETING_RE.match(request.message.strip().lower()))
         use_docs = request.use_docs if request.use_docs is not None else not is_greeting
-        conversation_id = await asyncio.to_thread(chat_service.resolve_conversation, request.conversation_id, request.message)
-        events = ask_stream(
-            request.message,
-            use_docs=use_docs,
-            project=request.project,
-            conversation_id=conversation_id,
-        )
+        # Save the user message (and an empty reply marked streaming) before the model runs.
+        conversation_id, reply_id = await asyncio.to_thread(database.begin_turn, request.conversation_id, request.message)
+        events = ask_stream(request.message, use_docs=use_docs, project=request.project)
         # Each next() on the generator runs in a worker thread so the server isn't blocked.
         async for event in iterate_in_threadpool(events):
+            if isinstance(event, TokenEvent):
+                parts.append(event.text)
+            elif isinstance(event, SourcesEvent):
+                sources = event.sources
             await websocket.send_json(event.model_dump())
+        # Saved before done is sent, so a client that sees done can rely on the reply being stored.
+        await asyncio.to_thread(database.finish_turn, reply_id, "".join(parts), sources)
+        await websocket.send_json(DoneEvent(conversation_id=conversation_id).model_dump())
     except WebSocketDisconnect:
         pass  # The client left mid-answer; cleanup happens below.
     except Exception as error:
@@ -83,5 +90,9 @@ async def chat_stream(websocket: WebSocket):
     finally:
         if events is not None:
             events.close()  # Stops the generator and closes the Ollama request.
+        if reply_id is not None:
+            # Stores whatever arrived as incomplete; does nothing if the reply was already saved complete.
+            # Called directly rather than in a thread so it still runs if the server is shutting down.
+            database.finish_turn(reply_id, "".join(parts), sources, complete=False)
         with contextlib.suppress(Exception):
             await websocket.close()

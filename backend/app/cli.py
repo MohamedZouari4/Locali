@@ -4,13 +4,12 @@ Run from the backend folder with `python -m app.cli` (add `--debug` to print pro
 
 import sys
 
-from app.ai.chat.orchestrator import ask
-from app.db.database import create_conversation
+from app.services.chat_service import get_answer
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-conversation_id = create_conversation(title="CLI Session")
-print(f"Local AI Assistant - conversation {conversation_id[:8]} - type 'exit' to quit")
+conversation_id = None  # the first answer starts a conversation
+print("Local AI Assistant - type 'exit' to quit")
 print("Prefix a question with 'doc:' to search your indexed files.\n")
 
 while True:
@@ -26,7 +25,9 @@ while True:
     use_docs = user_input.lower().startswith("doc:")
     query = user_input[4:].strip() if use_docs else user_input
 
-    answer, sources, used_tools = ask(query, use_docs=use_docs, conversation_id=conversation_id)
+    reply = get_answer(query, use_docs=use_docs, conversation_id=conversation_id)
+    conversation_id = reply["conversation_id"]
+    answer, sources, used_tools = reply["response"], reply["sources"], reply["used_tools"]
 
     prefix = "🔧" if used_tools else "💬"
     print(f"\n{prefix} Assistant: {answer}")

@@ -19,7 +19,7 @@ def _repo_path(*parts):
 @dataclass(frozen=True)
 class ModelSettings:
     ollama_url: str = "http://localhost:11434"
-    chat_model: str = "qwen3:4b"
+    chat_model: str = "qwen3:4b-instruct"
     embedding_model: str = "nomic-embed-text:latest"
     rerank_enabled: bool = True
     rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"

@@ -15,9 +15,8 @@ import requests
 from app.ai.chat.prompts import SYSTEM_PROMPT, TOOL_LIMIT_MESSAGE, build_prompt
 from app.ai.chat.tool_schema import AVAILABLE_TOOLS, TOOLS_SCHEMA
 from app.ai.retrieval import retrieve
-from app.chat_events import DoneEvent, SourcesEvent, TokenEvent
+from app.chat_events import SourcesEvent, TokenEvent
 from app.core.config import CHAT_MODEL, OLLAMA_URL
-from app.db import database
 from app.tools.audit_log import log_action
 
 DEBUG = "--debug" in sys.argv
@@ -96,18 +95,7 @@ def _run_tool_calls(tool_calls, messages):
         messages.append({"role": "tool", "content": str(result)})
 
 
-def _save_conversation(conversation_id, query, answer, sources):
-    if not conversation_id:
-        return
-    try:
-        database.save_conversation(conversation_id, "user", query)
-        database.save_conversation(conversation_id, "assistant", answer, sources)
-    except Exception as e:
-        if DEBUG:
-            print(f"[DEBUG] Error saving conversation: {e}")
-
-
-def ask(query, use_docs=False, project=None, conversation_id=None):
+def ask(query, use_docs=False, project=None):
     messages, sources = _build_messages(query, use_docs, project)
     with_tools = not sources
     used_tools = False
@@ -129,12 +117,12 @@ def ask(query, use_docs=False, project=None, conversation_id=None):
         messages.append(message)
         _run_tool_calls(tool_calls, messages)
 
-    _save_conversation(conversation_id, query, answer, sources)
     return answer, sources, used_tools
 
 
-def ask_stream(query, use_docs=False, project=None, conversation_id=None):
-    # Same as ask(), but yields the answer token by token, then a final event with the sources.
+def ask_stream(query, use_docs=False, project=None):
+    # Same as ask(), but yields the answer token by token, then an event with the sources.
+    # The caller saves the reply and ends the stream with a done event.
     messages, sources = _build_messages(query, use_docs, project)
     with_tools = not sources
     answer = TOOL_LIMIT_MESSAGE
@@ -172,6 +160,4 @@ def ask_stream(query, use_docs=False, project=None, conversation_id=None):
         # The loop ran out of rounds without a final answer.
         yield TokenEvent(text=answer)
 
-    _save_conversation(conversation_id, query, answer, sources)
     yield SourcesEvent(sources=sources)
-    yield DoneEvent(conversation_id=conversation_id)

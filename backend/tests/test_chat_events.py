@@ -11,7 +11,7 @@ from app.ai.chat import orchestrator
 from app.api.main import app
 from app.chat_events import CHAT_SUBPROTOCOL, chat_event_adapter
 from app.core.security import API_TOKEN
-from app.services import chat_service
+from app.db import database
 
 
 def _headers():
@@ -29,17 +29,17 @@ def _ollama_reply(*texts):
 
 
 class ChatEventContractTests(unittest.TestCase):
-    def test_ask_stream_sends_tokens_then_sources_then_done(self):
+    def test_ask_stream_sends_tokens_then_sources(self):
         with patch.object(orchestrator.requests, "post", return_value=_ollama_reply("hi ", "there")):
             events = [event.model_dump() for event in orchestrator.ask_stream("hello")]
 
-        self.assertEqual([event["type"] for event in events], ["token", "token", "sources", "done"])
+        self.assertEqual([event["type"] for event in events], ["token", "token", "sources"])
 
     def test_websocket_only_sends_documented_events(self):
         with (
             patch.object(orchestrator.requests, "post", return_value=_ollama_reply("ok")),
-            patch.object(orchestrator, "_save_conversation"),
-            patch.object(chat_service, "resolve_conversation", return_value="conv-1"),
+            patch.object(database, "begin_turn", return_value=("conv-1", 1)),
+            patch.object(database, "finish_turn"),
         ):
             client = TestClient(app)
             with client.websocket_connect("/chat/stream", headers=_headers(), subprotocols=[CHAT_SUBPROTOCOL]) as ws:
