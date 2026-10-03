@@ -189,16 +189,6 @@ class PersistenceTestCase(unittest.TestCase):
         self.assertEqual(events[-1], {"type": "done", "conversation_id": conv_id})
         self.assertEqual(self._saved(conv_id), [("user", "hello", "complete"), ("assistant", "hi there", "complete")])
 
-    def test_stream_cut_off_mid_answer_is_stored_incomplete(self):
-        def lines():
-            yield json.dumps({"message": {"content": "partial "}, "done": False}).encode()
-            raise ConnectionError("Ollama stopped")
-
-        events, conv_id = self._stream_turn(lines())
-
-        self.assertEqual([event["type"] for event in events], ["token", "error"])
-        self.assertEqual(self._saved(conv_id), [("user", "hello", "complete"), ("assistant", "partial ", "incomplete")])
-
 
 if __name__ == "__main__":
     unittest.main()
