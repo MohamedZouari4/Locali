@@ -141,14 +141,29 @@ ipcMain.handle('api:chat', (_event, { message, conversationId }) =>
   })
 );
 
+// Only one chat stream runs at a time. Events from any other socket (one the user stopped or
+// replaced) are dropped, so they can't leak into the current answer.
+let activeChatSocket = null;
+
+function closeActiveChatSocket() {
+  const ws = activeChatSocket;
+  activeChatSocket = null;
+  ws?.close();
+}
+
 ipcMain.handle(
   'api:chat:stream:start',
   (event, { message, conversationId, useDocs }) => {
     const token = getAuthToken();
     console.log(`[Locali] Starting chat stream${conversationId ? ` for ${conversationId}` : ''}`);
+    closeActiveChatSocket();
     const ws = new WebSocket(CHAT_STREAM_URL, CHAT_SUBPROTOCOL, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
+    activeChatSocket = ws;
+    const forward = (channel, payload) => {
+      if (activeChatSocket === ws && !event.sender.isDestroyed()) event.sender.send(channel, payload);
+    };
 
     ws.on('open', () => {
       console.log('[Locali] Chat stream connected');
@@ -167,21 +182,21 @@ ipcMain.handle(
       // Event contract: docs/CHAT_EVENTS.md. Ignore event types this client doesn't handle yet.
       switch (payload.type) {
         case 'token':
-          event.sender.send('api:chat:stream:chunk', payload.text ?? '');
+          forward('api:chat:stream:chunk', payload.text ?? '');
           break;
         case 'sources':
           sources = payload.sources ?? [];
           break;
         case 'done':
           console.log('[Locali] Chat stream completed');
-          event.sender.send('api:chat:stream:final', {
+          forward('api:chat:stream:final', {
             sources,
             conversationId: payload.conversation_id,
           });
           break;
         case 'error':
           console.error(`[Locali] Chat stream backend error: ${payload.text ?? 'unknown error'}`);
-          event.sender.send('api:chat:stream:error', payload.text ?? 'The local API failed');
+          forward('api:chat:stream:error', payload.text ?? 'The local API failed');
           break;
         default:
           break;
@@ -189,14 +204,20 @@ ipcMain.handle(
     });
     ws.on('close', () => {
       console.log('[Locali] Chat stream closed');
-      event.sender.send('api:chat:stream:done');
+      forward('api:chat:stream:done'); // the renderer treats a close without done/error as a failure
+      if (activeChatSocket === ws) activeChatSocket = null;
     });
     ws.on('error', (error) => {
       console.error(`[Locali] Chat stream error: ${error.message}`);
-      event.sender.send('api:chat:stream:error', error.message);
+      forward('api:chat:stream:error', error.message);
     });
   }
 );
+
+ipcMain.handle('api:chat:stream:stop', () => {
+  console.log('[Locali] Chat stream stopped by user');
+  closeActiveChatSocket();
+});
 
 ipcMain.handle('api:search', (_event, { query }) =>
   apiFetch(`/search?q=${encodeURIComponent(query)}`)

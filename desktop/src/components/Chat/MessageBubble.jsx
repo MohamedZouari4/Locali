@@ -1,17 +1,28 @@
 // One chat message, with source chips that reveal the cited file when clicked.
 
-export function MessageBubble({ message }) {
-  const { role, text, isStreaming, sources } = message
+export function MessageBubble({ message, onRetry }) {
+  const { role, text, isStreaming, sources, error, stopped } = message
 
   return (
     <article className={`bubble bubble--${role}`}>
       <div className="bubble__meta">{role === 'user' ? 'You' : 'Locali'}<span>{role === 'assistant' && ' · Local'}</span></div>
-      <div className="bubble__text">
-        {text || (isStreaming ? 'Thinking' : '')}
-        {isStreaming && (
-          <span className="bubble__cursor" aria-hidden="true" />
-        )}
-      </div>
+      {(text || isStreaming) && (
+        <div className="bubble__text">
+          {text || 'Thinking'}
+          {isStreaming && <span className="bubble__cursor" aria-hidden="true" />}
+        </div>
+      )}
+      {stopped && <p className="bubble__note">Stopped</p>}
+      {error && (
+        <div className="bubble__error" role="alert">
+          <span>{error}</span>
+          {onRetry && (
+            <button type="button" className="bubble__retry" onClick={onRetry}>
+              Retry
+            </button>
+          )}
+        </div>
+      )}
       {sources?.length > 0 && (
         <div className="bubble__citations" aria-label="Sources">
           {sources.map((source) => {

@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('localiAPI', {
   chatStream: {
     start: (message, conversationId, useDocs) =>
       ipcRenderer.invoke('api:chat:stream:start', { message, conversationId, useDocs }),
+    stop: () => ipcRenderer.invoke('api:chat:stream:stop'),
     onChunk: (callback) => {
       const listener = (_event, chunk) => callback(chunk);
       ipcRenderer.on('api:chat:stream:chunk', listener);

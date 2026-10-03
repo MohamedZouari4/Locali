@@ -113,6 +113,11 @@ kbd { margin-left: auto; color: var(--color-text-secondary); font: 10px var(--mo
 .bubble__citations { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-4); }
 .citation-chip { padding: 6px 9px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; font-size: 11px; }
 .citation-chip:hover { border-color: var(--color-accent); color: var(--color-accent); }
+.send-button--stop { font-size: 12px; }
+.bubble__note { margin-top: var(--space-2); color: var(--color-text-secondary); font-size: 11px; }
+.bubble__error { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-danger); border-radius: var(--radius-sm); color: var(--color-danger); font-size: 12px; }
+.bubble__retry { margin-left: auto; padding: 4px 10px; border: 1px solid var(--color-danger); border-radius: var(--radius-sm); background: transparent; color: var(--color-danger); cursor: pointer; font-size: 11px; font-weight: 600; }
+.bubble__retry:hover { background: var(--color-danger); color: var(--color-surface); }
 @keyframes blink { 50% { opacity: 0; } }
 
 .context-panel { width: 278px; flex: 0 0 278px; padding: var(--space-6) var(--space-5); border-left: 1px solid var(--color-border); background: var(--color-surface); box-sizing: border-box; animation: panel-in .2s ease both; }
