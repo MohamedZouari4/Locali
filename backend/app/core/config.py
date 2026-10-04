@@ -32,6 +32,8 @@ class LimitSettings:
     rerank_max_length: int = 512
     rerank_batch_size: int = 16
     rerank_timeout_ms: int = 3000
+    job_poll_seconds: float = 1.0  # how often the idle job worker checks for queued jobs
+    job_progress_interval_seconds: float = 1.0  # a job's progress is saved at most this often
 
 
 @dataclass(frozen=True)
@@ -198,6 +200,8 @@ RERANK_TOP_N = LIMITS.rerank_top_n
 RERANK_MAX_LENGTH = LIMITS.rerank_max_length
 RERANK_BATCH_SIZE = LIMITS.rerank_batch_size
 RERANK_TIMEOUT_MS = LIMITS.rerank_timeout_ms
+JOB_POLL_SECONDS = LIMITS.job_poll_seconds
+JOB_PROGRESS_INTERVAL_SECONDS = LIMITS.job_progress_interval_seconds
 
 VECTOR_DIR = PATHS.vector_dir
 DB_PATH = PATHS.db_path

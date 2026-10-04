@@ -1,11 +1,13 @@
 """FastAPI application: registers request logging, the global error handler, and the chat,
-ingestion, search and file routers.
+ingestion, search and file routers, and runs the background job worker while the server is up.
 
 Every route except /health and /favicon.ico requires the bearer token.
 Run from the backend folder with `python -m uvicorn app.api.main:app`.
 """
 
+import asyncio
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.openapi.utils import get_openapi
@@ -17,8 +19,19 @@ from app.api.errors import global_exception_handler
 from app.api.middleware import RequestLoggingMiddleware
 from app.api.routers import chat, conversations, files, ingest, search
 from app.core.config import REPO_ROOT
+from app.jobs import worker
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    # Jobs a previous run left running are marked failed, then queued jobs start running.
+    await asyncio.to_thread(worker.start_worker)
+    yield
+    await asyncio.to_thread(worker.stop_worker)
+
 
 app = FastAPI(
+    lifespan=lifespan,
     title="Local AI Workspace Assistant",
     version="1.0",
     description="A local-first AI assistant with document Q&A and safe file operations.",
