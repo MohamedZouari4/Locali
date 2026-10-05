@@ -1,5 +1,5 @@
 """Tests for the Chroma store and keyword search against a temporary index: a full reset empties it,
-and keyword search works on an empty index. No Ollama needed: embeddings are given directly.
+whole-index reads go page by page, and keyword search works on an empty index. No Ollama needed: embeddings are given directly.
 """
 
 import shutil
@@ -44,6 +44,16 @@ class TestResetIndex(TempIndexTestCase):
 
     def test_reset_on_empty_index_does_nothing(self):
         self.assertEqual(store.reset_index(), 0)
+
+
+class TestWholeIndexReads(TempIndexTestCase):
+    # A large index read in one call fails in Chroma with "too many SQL variables"; these reads page.
+    def test_sources_and_reset_read_every_page(self):
+        self._add(10)
+        with patch.object(store, "READ_BATCH_SIZE", 3):
+            self.assertEqual(store.indexed_sources(), {f"/tmp/file{i}.md" for i in range(10)})
+            self.assertEqual(store.reset_index(), 10)
+        self.assertEqual(store.get_collection().count(), 0)
 
 
 class TestKeywordSearch(TempIndexTestCase):

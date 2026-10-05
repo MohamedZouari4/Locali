@@ -1,7 +1,7 @@
 // Electron main process: starts the Python API and Ollama if they aren't already running, opens the window,
-// and forwards the renderer's IPC requests (streaming chat, conversations, background jobs, revealing files) to the local API.
+// and forwards the renderer's IPC requests (streaming chat, conversations, background jobs, indexed folders, revealing files) to the local API.
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { spawn } = require('node:child_process');
@@ -142,10 +142,23 @@ function getAuthToken() {
 const api = createApiClient(API_BASE_URL, getAuthToken);
 
 // --- Whitelisted IPC channels. Each one wraps exactly one backend call. ---
-ipcMain.handle('api:health', async () => ({
-  api: await isServiceReady(`${API_BASE_URL}/health`),
-  ollama: await isServiceReady('http://127.0.0.1:11434/api/tags'),
-}));
+// The backend's health checks. When the backend itself can't be reached, says so in the same shape.
+ipcMain.handle('api:health', async () => {
+  try {
+    return await api.healthChecks();
+  } catch {
+    return {
+      status: 'error',
+      checks: [{
+        id: 'service',
+        status: 'error',
+        title: 'Locali service not running',
+        detail: `The app can't reach its local service at ${API_BASE_URL}.`,
+        fix: 'Restart Locali. If you started the backend yourself, start it again.',
+      }],
+    };
+  }
+});
 
 // Only one chat stream runs at a time. Events from any other socket (one the user stopped or
 // replaced) are dropped, so they can't leak into the current answer.
@@ -276,6 +289,23 @@ function disconnectJobEvents() {
 ipcMain.handle('api:jobs:list-active', () => api.listActiveJobs());
 
 ipcMain.handle('api:jobs:cancel', (_event, { id }) => api.cancelJob(id));
+
+ipcMain.handle('api:folders:list', () => api.listFolders());
+
+// The folder comes from the native picker opened here, never from the page, so a compromised page
+// can't add a path of its own choosing. The backend still checks it against the exclusions.
+ipcMain.handle('api:folders:choose', async (event) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+    title: 'Choose a folder to index',
+    properties: ['openDirectory'],
+  });
+  if (canceled || filePaths.length === 0) return null;
+  return api.addFolder(filePaths[0]);
+});
+
+ipcMain.handle('api:folders:remove', (_event, { id }) => api.removeFolder(id));
+
+ipcMain.handle('api:indexing:start', () => api.startIndexing());
 
 ipcMain.handle('api:files:reveal', (_event, { relativePath }) => {
   if (typeof relativePath !== 'string') {

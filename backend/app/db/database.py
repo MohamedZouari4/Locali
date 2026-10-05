@@ -88,6 +88,14 @@ def init_schema(conn):
     cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS one_running_job_per_project ON jobs(project) WHERE state = 'running'")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_jobs_state ON jobs(state, created_at)")
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS indexed_folders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path TEXT NOT NULL UNIQUE,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)")
 
     # A reply still marked streaming when the server starts was cut off by a crash or shutdown.
@@ -326,6 +334,34 @@ def list_jobs(states=None, limit=50, kind=None):
     rows = conn.execute(query, args).fetchall()
     conn.close()
     return [_job_from_row(row) for row in rows]
+
+
+def list_indexed_folders():
+    """The folders chosen in the app for ingestion, in path order."""
+    conn = get_connection()
+    rows = conn.execute("SELECT id, path, added_at FROM indexed_folders ORDER BY path").fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def add_indexed_folder(path, replaces=()):
+    """Adds a folder and returns it, removing the folders in `replaces` (inside it) in the same transaction."""
+    with _transaction() as conn:
+        for folder_id in replaces:
+            conn.execute("DELETE FROM indexed_folders WHERE id = ?", (folder_id,))
+        folder_id = conn.execute("INSERT INTO indexed_folders (path) VALUES (?)", (path,)).lastrowid
+        row = conn.execute("SELECT id, path, added_at FROM indexed_folders WHERE id = ?", (folder_id,)).fetchone()
+    return dict(row)
+
+
+def remove_indexed_folder(folder_id):
+    """Removes a folder from the list and returns its path, or None if there is no such folder."""
+    with _transaction() as conn:
+        row = conn.execute("SELECT path FROM indexed_folders WHERE id = ?", (folder_id,)).fetchone()
+        if row is None:
+            return None
+        conn.execute("DELETE FROM indexed_folders WHERE id = ?", (folder_id,))
+    return row["path"]
 
 
 if __name__ == "__main__":

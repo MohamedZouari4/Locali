@@ -1,8 +1,8 @@
 """FastAPI application: registers request logging, the global error handler, and the chat,
-conversation, job, ingestion, search and file routers, and runs the background job worker while
+conversation, job, folder, ingestion, search and file routers, and runs the background job worker while
 the server is up. Starting it with LOCALI_DEMO_JOBS=1 adds the `demo` job kind (app/jobs/demo.py).
 
-Every route except /health and /favicon.ico requires the bearer token.
+Every route except /health and /favicon.ico requires the bearer token; /health/checks has the details.
 Run from the backend folder with `python -m uvicorn app.api.main:app`.
 """
 
@@ -18,7 +18,7 @@ from app import chat_events, job_events
 from app.api.deps import verify_token
 from app.api.errors import global_exception_handler
 from app.api.middleware import RequestLoggingMiddleware
-from app.api.routers import chat, conversations, files, ingest, jobs, search
+from app.api.routers import chat, conversations, files, folders, health, ingest, jobs, search
 from app.core.config import REPO_ROOT
 from app.jobs import demo, worker
 
@@ -43,9 +43,11 @@ app = FastAPI(
 app.add_middleware(RequestLoggingMiddleware)
 app.add_exception_handler(Exception, global_exception_handler)
 
+app.include_router(health.router, tags=["System"], dependencies=[Depends(verify_token)])
 app.include_router(chat.router, tags=["Chat"], dependencies=[Depends(verify_token)])
 app.include_router(conversations.router, tags=["Conversations"], dependencies=[Depends(verify_token)])
 app.include_router(jobs.router, tags=["Jobs"], dependencies=[Depends(verify_token)])
+app.include_router(folders.router, tags=["Ingestion"], dependencies=[Depends(verify_token)])
 app.include_router(ingest.router, tags=["Ingestion"], dependencies=[Depends(verify_token)])
 app.include_router(search.router, tags=["Search"], dependencies=[Depends(verify_token)])
 app.include_router(files.router, tags=["Files"], dependencies=[Depends(verify_token)])
@@ -59,6 +61,7 @@ def favicon():
 
 @app.get("/health", tags=["System"])
 def health():
+    """Liveness only, without the token, so Electron can wait for the server. Details: GET /health/checks."""
     return {"status": "ok"}
 
 

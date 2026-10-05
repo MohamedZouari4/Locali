@@ -34,7 +34,7 @@ class PipelineProgressTests(unittest.TestCase):
         self._patches = [
             patch.object(pipeline, "store", self.store),
             patch.object(pipeline, "walk_data_dir", return_value=iter(self.files)),
-            patch.object(pipeline.config, "SCAN_DRIVES", [self.tmpdir]),
+            patch.object(pipeline, "scan_roots", return_value=[self.tmpdir]),
         ]
         for p in self._patches:
             p.start()
@@ -111,9 +111,11 @@ class IngestRouteTests(IngestJobTestCase):
 
         second = self.client.post("/ingest")
         self.assertEqual(second.status_code, 409)
-        self.assertIn(f"already queued or running (job {first['id']}, queued)", second.json()["detail"])
-        # The generic route is held to the same rule.
-        self.assertEqual(self.client.post("/jobs", json={"kind": "ingest"}).status_code, 409)
+        self.assertIn("Indexing is already running", second.json()["detail"])
+        # The generic route is held to the same rule, and names the job that is in the way.
+        generic = self.client.post("/jobs", json={"kind": "ingest"})
+        self.assertEqual(generic.status_code, 409)
+        self.assertIn(f"already queued or running (job {first['id']}, queued)", generic.json()["detail"])
 
     def test_ingest_can_start_again_once_the_last_one_ended(self):
         first = self.client.post("/ingest").json()

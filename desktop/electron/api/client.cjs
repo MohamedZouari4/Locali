@@ -56,6 +56,20 @@ function createApiClient(baseUrl, getToken) {
     // Queued and running jobs, newest first; live changes arrive on the /jobs/events socket.
     listActiveJobs: () => unwrap(client.GET('/jobs', { params: { query: { state: ['queued', 'running'] } } })),
 
+    // Model runtime, models, disk space and OCR, each with a fix when something is wrong.
+    healthChecks: () => unwrap(client.GET('/health/checks')),
+
+    listFolders: () => unwrap(client.GET('/folders')),
+
+    /** @param {string} path */
+    addFolder: (path) => unwrap(client.POST('/folders', { body: { path } })),
+
+    /** @param {number} id */
+    removeFolder: (id) => unwrap(client.DELETE('/folders/{folder_id}', { params: { path: { folder_id: id } } })),
+
+    // Queues an ingest job over every indexed folder; fails with the backend's message if one is already active.
+    startIndexing: () => unwrap(client.POST('/ingest')),
+
     /** @param {string} id */
     cancelJob: (id) => unwrap(client.POST('/jobs/{job_id}/cancel', { params: { path: { job_id: id } } })),
   };

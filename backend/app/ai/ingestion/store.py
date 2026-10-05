@@ -11,6 +11,9 @@ from app.core import config
 COLLECTION_NAME = "documents"
 WRITE_BATCH_SIZE = 500
 DELETE_BATCH_SIZE = 5000  # below Chroma's maximum batch size for SQLite-backed stores
+# Reading a large index in one call makes Chroma build an SQL query with more variables than
+# SQLite allows ("too many SQL variables"), so whole-index reads go in pages of this size.
+READ_BATCH_SIZE = 1000
 
 _collection = None
 
@@ -92,10 +95,17 @@ def stored_hash(source):
     return existing["metadatas"][0].get("file_hash") if existing["metadatas"] else None
 
 
+def _read_all(include):
+    """Yield every record of the index in pages of READ_BATCH_SIZE, as Chroma `get` results."""
+    collection = get_collection()
+    total = collection.count()
+    for offset in range(0, total, READ_BATCH_SIZE):
+        yield collection.get(limit=READ_BATCH_SIZE, offset=offset, include=include)
+
+
 def indexed_sources():
     """Return the distinct source paths currently in the index."""
-    collection = get_collection()
-    return {meta["source"] for meta in collection.get(include=["metadatas"])["metadatas"]}
+    return {meta["source"] for page in _read_all(["metadatas"]) for meta in page["metadatas"]}
 
 
 def delete_source(source):
@@ -108,7 +118,8 @@ def reset_index():
     Deletes by id, because Chroma rejects an empty `where={}` filter.
     """
     collection = get_collection()
-    ids = collection.get(include=[])["ids"]
+    # Collect every id before deleting, so deletions don't shift the pages still being read.
+    ids = [chunk_id for page in _read_all([]) for chunk_id in page["ids"]]
     for start in range(0, len(ids), DELETE_BATCH_SIZE):
         collection.delete(ids=ids[start : start + DELETE_BATCH_SIZE])
     print(f"Index reset complete ({len(ids)} chunks removed).")

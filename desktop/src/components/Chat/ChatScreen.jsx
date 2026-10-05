@@ -1,13 +1,18 @@
 // Main chat screen: sidebar with saved conversations and background tasks, message list, and composer with the "Use my docs" toggle.
-// Features without backend support yet (attachments, settings, workspace stats, context panel) are hidden.
+// The sidebar footer opens the Indexed folders dialog. Features without backend support yet
+// (attachments, settings, workspace stats, context panel) are hidden.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useChatStream } from '../../hooks/useChatStream'
 import { useConversations } from '../../hooks/useConversations'
+import { useFolders } from '../../hooks/useFolders'
+import { useHealth } from '../../hooks/useHealth'
 import { useJobs } from '../../hooks/useJobs'
 import { useTheme } from '../../hooks/useTheme'
 import { BrandMark, Icon } from '../Icon'
 import { ConversationList } from './ConversationList'
+import { FoldersDialog } from './FoldersDialog'
+import { HealthBanner } from './HealthBanner'
 import { JobsPanel } from './JobsPanel'
 import { MessageBubble } from './MessageBubble'
 import './ChatScreen.css'
@@ -26,33 +31,17 @@ export function ChatScreen() {
   const { messages, conversationId, sendMessage, retry, stop, loadConversation, newChat } = useChatStream()
   const { conversations, error: conversationsError, refresh, rename, remove } = useConversations()
   const { jobs, cancel: cancelJob } = useJobs()
+  const { folders, message: folderMessage, addFolder, removeFolder, indexNow, clearMessage } = useFolders()
+  const [foldersOpen, setFoldersOpen] = useState(false)
   const { theme, toggleTheme } = useTheme()
   const [draft, setDraft] = useState('')
   const [useDocs, setUseDocs] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(() => !window.matchMedia(narrowScreen).matches)
-  const [ollamaReady, setOllamaReady] = useState(false)
+  const { report: health, checkAgain } = useHealth()
   const scrollRef = useRef(null)
   const stickToBottom = useRef(true)
   const textareaRef = useRef(null)
   const isBusy = messages[messages.length - 1]?.isStreaming ?? false
-
-  useEffect(() => {
-    let active = true
-
-    const checkHealth = async () => {
-      try {
-        const health = await window.localiAPI?.health()
-        if (active) setOllamaReady(health?.ollama === true)
-      } catch {
-        if (active) setOllamaReady(false)
-      }
-    }
-
-    checkHealth()
-    return () => {
-      active = false
-    }
-  }, [])
 
   // The backend saves every turn, so reload the list on start and whenever an answer ends.
   useEffect(() => {
@@ -106,6 +95,17 @@ export function ChatScreen() {
     setDraft('')
   }
 
+  // "Use my docs" needs something to read: with no folders yet, turning it on opens the folder dialog.
+  const toggleDocs = () => {
+    if (!useDocs && folders.length === 0) setFoldersOpen(true)
+    setUseDocs(!useDocs)
+  }
+
+  const closeFolders = () => {
+    setFoldersOpen(false)
+    clearMessage()
+  }
+
   const fillSuggestion = (text) => {
     setDraft(text)
     textareaRef.current?.focus()
@@ -135,9 +135,12 @@ export function ChatScreen() {
           <JobsPanel jobs={jobs} onCancel={cancelJob} />
 
           <footer className="sidebar__footer">
-            <span className={`status ${ollamaReady ? '' : 'status--offline'}`}>
-              <i aria-hidden="true" /> {ollamaReady ? 'Running locally' : 'Ollama unavailable'}
+            <span className={`status ${health?.status === 'ok' ? '' : 'status--offline'}`}>
+              <i aria-hidden="true" /> {!health ? 'Checking…' : health.status === 'ok' ? 'Running locally' : 'Needs attention'}
             </span>
+            <button className="icon-button sidebar__folders" type="button" onClick={() => setFoldersOpen(true)} aria-label="Indexed folders" title="Indexed folders">
+              <Icon name="folder" />
+            </button>
             <button className="icon-button" type="button" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title={theme === 'dark' ? 'Light theme' : 'Dark theme'}>
               <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
             </button>
@@ -154,6 +157,8 @@ export function ChatScreen() {
           <h1>{activeTitle}</h1>
           <span className="privacy-badge"><Icon name="lock" size={13} /> On-device</span>
         </header>
+
+        <HealthBanner report={health} onCheckAgain={checkAgain} />
 
         <div className="chat-scroll" ref={scrollRef} onScroll={handleScroll} aria-live="polite">
           <div className="chat-thread">
@@ -199,7 +204,7 @@ export function ChatScreen() {
               rows={1}
             />
             <div className="composer__footer">
-              <button className={`docs-toggle ${useDocs ? 'docs-toggle--on' : ''}`} type="button" onClick={() => setUseDocs(!useDocs)} aria-pressed={useDocs} title="Answer using the files in your workspace">
+              <button className={`docs-toggle ${useDocs ? 'docs-toggle--on' : ''}`} type="button" onClick={toggleDocs} aria-pressed={useDocs} title="Answer using the files in your workspace">
                 <Icon name="file" size={15} /> Use my docs
               </button>
               <span className="composer__hint"><kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line</span>
@@ -213,6 +218,8 @@ export function ChatScreen() {
           <p className="composer-note">Private · Processed on this device. Answers can be wrong, so check what matters.</p>
         </div>
       </main>
+
+      <FoldersDialog open={foldersOpen} onClose={closeFolders} folders={folders} message={folderMessage} onAdd={addFolder} onRemove={removeFolder} onIndexNow={indexNow} />
     </div>
   )
 }

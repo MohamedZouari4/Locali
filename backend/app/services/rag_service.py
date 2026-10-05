@@ -5,16 +5,17 @@ with the job, progress is reported per file, and the job can be cancelled. Only 
 queued or running at a time. When a run ends, the keyword-search caches are rebuilt so newly indexed
 files are searchable straight away.
 
-Importing this module registers the `ingest` job kind; app/api/main.py imports it through the routers.
+Importing this module registers the `ingest` and `forget_folder` job kinds; app/api/main.py imports it through the routers.
 """
 
-from app.ai.ingestion import ingest_all, prune_stale, reset_index
+from app.ai.ingestion import forget_folder, ingest_all, prune_stale, reset_index
 from app.ai.retrieval import retrieve
 from app.ai.retrieval.sparse_retriever import invalidate_caches
 from app.db import database
 from app.jobs import worker
 
 INGEST_KIND = "ingest"
+FORGET_FOLDER_KIND = "forget_folder"
 
 
 def run_ingestion(full_reset=False, report=None):
@@ -29,13 +30,27 @@ def run_ingestion(full_reset=False, report=None):
         invalidate_caches()
 
 
-@worker.handler(INGEST_KIND, single_flight=True)
-def run_ingest_job(params, ctx):
+def _reporter(ctx):
+    # The pipeline's progress callback for a job: stop if cancelled, otherwise save the progress.
     def report(current, total, message):
         ctx.check_cancelled()
         ctx.progress(current, total, message)
 
-    return run_ingestion(bool(params.get("full_reset")), report)
+    return report
+
+
+@worker.handler(INGEST_KIND, single_flight=True)
+def run_ingest_job(params, ctx):
+    return run_ingestion(bool(params.get("full_reset")), _reporter(ctx))
+
+
+@worker.handler(FORGET_FOLDER_KIND)
+def run_forget_folder_job(params, ctx):
+    """Removes a folder's files from the index after the folder was taken off the indexed list."""
+    try:
+        return {"removed": forget_folder(params["path"], report=_reporter(ctx))}
+    finally:
+        invalidate_caches()
 
 
 def start_ingestion(full_reset=False):

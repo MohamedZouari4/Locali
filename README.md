@@ -130,6 +130,7 @@ All settings live in [backend/app/core/config.py](backend/app/core/config.py), g
 | `RERANK_MAX_LENGTH` | `512` | Maximum token length of each query/chunk pair given to the cross-encoder. |
 | `RERANK_BATCH_SIZE` | `16` | Pairs scored per cross-encoder batch. |
 | `RERANK_TIMEOUT_MS` | `3000` | If reranking takes longer than this, the merged order is used instead. |
+| `MIN_FREE_DISK_MB` | `2048` | Below this much free space where the index and database live, the health checks warn. |
 | `JOB_POLL_SECONDS` | `1.0` | How often the idle background-job worker checks for queued jobs. |
 | `JOB_PROGRESS_INTERVAL_SECONDS` | `1.0` | A running job's progress is saved at most this often. |
 | `JOB_EVENTS_POLL_SECONDS` | `0.5` | How often `/jobs/events` looks for changed jobs. |
@@ -152,7 +153,7 @@ All relative to the repository root.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `SCAN_DRIVES` | `[]` (nothing is scanned) | Folders that ingestion walks. |
+| `SCAN_DRIVES` | `[]` | Extra folders that ingestion walks, besides those chosen in the app (sidebar → Indexed folders). Mostly for development. |
 | `SYSTEM_EXCLUDE` | 6 Windows system folders, such as `C:/Windows` | Folders skipped, with everything under them. |
 | `PRIVACY_EXCLUDE` | 5 browser-profile and credential paths | Any folder whose path contains one of these is skipped. |
 | `IGNORE_DIRS` | 46 names, such as `.git`, `node_modules` and `.ssh` | Folder names skipped wherever they appear. |
@@ -160,7 +161,7 @@ All relative to the repository root.
 | `CODE_EXTENSIONS` | 20 extensions, such as `py`, `js`, `md` and `txt` | Extensions read as code or plain text. |
 | `SKIP_EXTENSIONS` | 33 extensions, such as `exe`, `zip` and `mp4` | Binary, archive and media extensions that are never ingested. |
 
-While `SCAN_DRIVES` is empty, ingestion and stale-entry pruning do nothing, so an existing index is left untouched.
+While no folder is chosen in the app and `SCAN_DRIVES` is empty, ingestion and stale-entry pruning do nothing, so an existing index is left untouched.
 
 ## Running
 
@@ -198,6 +199,7 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | Returns `{ "status": "ok" }`. |
+| `GET` | `/health/checks` | Model runtime, required models, free disk space and OCR, each `ok`, `warning`, `error` or `unknown` with a fix when something is wrong. Needs the token. |
 | `POST` | `/chat` | Body `message`, `use_docs`, optional `project` and `conversation_id`; returns `response`, `sources`, `conversation_id`. |
 | `WS` | `/chat/stream` | Send `{message, use_docs?, project?, conversation_id?}`; receive `token` events, then `sources` and `done`, or an `error` event. See [docs/CHAT_EVENTS.md](docs/CHAT_EVENTS.md). |
 | `GET` | `/conversations` | Past chats, most recently active first: `id`, `title`, `started_at`, `updated_at`, `message_count`. |
@@ -210,6 +212,9 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | `POST` | `/jobs/{id}/cancel` | Cancels a queued job at once; a running job stops at its next check. |
 | `WS` | `/jobs/events` | Pushes a `job` event whenever a job changes. See [docs/JOB_EVENTS.md](docs/JOB_EVENTS.md). |
 | `GET` | `/search?q=...&k=4&project=...` | Returns shortened retrieved chunks and source paths. |
+| `GET` | `/folders` | The folders chosen for indexing, in path order. |
+| `POST` | `/folders` | Adds a folder; body `{ "path": "..." }`; `201`, or `422` with the reason (missing, system/private/ignored folder, already covered). |
+| `DELETE` | `/folders/{id}` | Removes a folder; a `forget_folder` job then removes its files from the index. |
 | `POST` | `/ingest?full_reset=false` | Queues an `ingest` job and returns it: `202`, or `409` if one is already queued or running. Follow it with `/jobs/{id}` or `/jobs/events`. |
 | `GET` | `/ingest/status` | The most recent `ingest` job (state, progress, counts or error), or `null` if indexing has never run. |
 | `GET` | `/files?path=.` | Lists a folder inside `ALLOWED_ROOT`. |

@@ -14,6 +14,7 @@ from starlette.concurrency import iterate_in_threadpool
 
 from app.ai.chat.orchestrator import ask_stream
 from app.chat_events import CHAT_SUBPROTOCOL, ChatStreamRequest, DoneEvent, ErrorEvent, SourcesEvent, TokenEvent
+from app.core.friendly_errors import describe_error
 from app.core.security import is_valid_token
 from app.db import database
 from app.services import chat_service
@@ -86,7 +87,7 @@ async def chat_stream(websocket: WebSocket):
     except Exception as error:
         # The socket may already be closed, so sending the error can fail too.
         with contextlib.suppress(Exception):
-            await websocket.send_json(ErrorEvent(text=str(error)).model_dump())
+            await websocket.send_json(ErrorEvent(text=describe_error(error) or str(error)).model_dump())
     finally:
         if events is not None:
             events.close()  # Stops the generator and closes the Ollama request.

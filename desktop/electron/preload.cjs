@@ -28,6 +28,17 @@ contextBridge.exposeInMainWorld('localiAPI', {
     },
   },
 
+  folders: {
+    list: () => ipcRenderer.invoke('api:folders:list'),
+    // Opens the native folder picker in the main process; resolves to the added folder, or null if cancelled.
+    choose: () => ipcRenderer.invoke('api:folders:choose'),
+    remove: (id) => ipcRenderer.invoke('api:folders:remove', { id }),
+  },
+
+  indexing: {
+    start: () => ipcRenderer.invoke('api:indexing:start'),
+  },
+
   files: {
     reveal: (relativePath) =>
       ipcRenderer.invoke('api:files:reveal', { relativePath }),

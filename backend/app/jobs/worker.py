@@ -12,6 +12,7 @@ import threading
 import time
 
 from app.core.config import JOB_CANCEL_CHECK_SECONDS, JOB_POLL_SECONDS, JOB_PROGRESS_INTERVAL_SECONDS
+from app.core.friendly_errors import describe_error
 from app.db import database
 
 log = logging.getLogger(__name__)
@@ -39,7 +40,8 @@ class JobAlreadyActive(Exception):
         self.kind = kind
         self.job = job
         where = f" (job {job['id']}, {job['state']})" if job else ""
-        super().__init__(f"A {kind} job is already queued or running{where}. Wait for it to finish or cancel it first.")
+        article = "An" if kind[:1].lower() in "aeiou" else "A"
+        super().__init__(f"{article} {kind} job is already queued or running{where}. Wait for it to finish or cancel it first.")
 
 
 class JobCancelled(Exception):
@@ -91,7 +93,7 @@ def run_job(job):
         state = "cancelled"
     except Exception as exc:
         log.exception("Job %s (%s) failed", job["id"], job["kind"])
-        state, error = "failed", f"{type(exc).__name__}: {exc}"
+        state, error = "failed", describe_error(exc) or f"{type(exc).__name__}: {exc}"
 
     try:
         database.finish_job(job["id"], state, result=result, error=error)

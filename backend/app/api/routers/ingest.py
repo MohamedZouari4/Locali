@@ -17,8 +17,10 @@ router = APIRouter()
 def trigger_ingest(full_reset: bool = False):
     try:
         return rag_service.start_ingestion(full_reset=full_reset)
-    except worker.JobAlreadyActive as error:
-        raise HTTPException(status_code=409, detail=str(error)) from None
+    except worker.JobAlreadyActive:
+        raise HTTPException(
+            status_code=409, detail="Indexing is already running. Wait for it to finish, or cancel it under Background tasks."
+        ) from None
 
 
 @router.get("/ingest/status", response_model=Job | None)

@@ -45,10 +45,10 @@ class TestIngestAskCitation(unittest.TestCase):
         with open(os.path.join(self.fixtures_dir, "notes.md"), "w", encoding="utf-8") as f:
             f.write(f"# Project Notes\n\nThe internal codename for this project is {MARKER}. It is unrelated to any other project.\n")
 
-        # The walker and the store read SCAN_DRIVES / VECTOR_DIR from config at call time,
-        # so patching config and reopening the collection is enough; no module reloads.
+        # The store reads VECTOR_DIR from config at call time, so patching config and reopening the
+        # collection is enough; the pipeline walks only the fixtures, not the folders chosen in the app.
         self._patches = [
-            patch.object(config, "SCAN_DRIVES", [self.fixtures_dir]),
+            patch.object(pipeline, "scan_roots", return_value=[self.fixtures_dir]),
             patch.object(config, "VECTOR_DIR", self.vector_dir),
         ]
         for p in self._patches:

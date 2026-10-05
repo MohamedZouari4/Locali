@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/health/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Health Checks */
+        get: operations["health_checks_health_checks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chat": {
         parameters: {
             query?: never;
@@ -110,6 +127,48 @@ export interface paths {
          */
         post: operations["cancel_job_jobs__job_id__cancel_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Folders */
+        get: operations["list_folders_folders_get"];
+        put?: never;
+        /**
+         * Add Folder
+         * @description Adds a folder to index. 422 with the reason if it doesn't exist, is a system, privacy or
+         *     ignored folder, or is already covered by another indexed folder.
+         */
+        post: operations["add_folder_folders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/folders/{folder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Folder
+         * @description Removes the folder from the list; a background job then removes its files from the index.
+         */
+        delete: operations["remove_folder_folders__folder_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -227,7 +286,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Health */
+        /**
+         * Health
+         * @description Liveness only, without the token, so Electron can wait for the server. Details: GET /health/checks.
+         */
         get: operations["health_health_get"];
         put?: never;
         post?: never;
@@ -241,6 +303,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AddFolderRequest */
+        AddFolderRequest: {
+            /**
+             * Path
+             * @description Full path of an existing folder.
+             */
+            path: string;
+        };
         /** ChatRequest */
         ChatRequest: {
             /** Message */
@@ -302,6 +372,41 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HealthCheck */
+        HealthCheck: {
+            /** Id */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "warning" | "error" | "unknown";
+            /** Title */
+            title: string;
+            /** Detail */
+            detail?: string | null;
+            /** Fix */
+            fix?: string | null;
+        };
+        /** HealthReport */
+        HealthReport: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "warning" | "error";
+            /** Checks */
+            checks: components["schemas"]["HealthCheck"][];
+        };
+        /** IndexedFolder */
+        IndexedFolder: {
+            /** Id */
+            id: number;
+            /** Path */
+            path: string;
+            /** Added At */
+            added_at: string;
         };
         /** Job */
         Job: {
@@ -590,6 +695,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    health_checks_health_checks_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     chat_chat_post: {
         parameters: {
             query?: never;
@@ -880,6 +1016,103 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Job"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_folders_folders_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexedFolder"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_folder_folders_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddFolderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexedFolder"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_folder_folders__folder_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+            };
+            path: {
+                folder_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

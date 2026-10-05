@@ -172,6 +172,27 @@ kbd {
 .job__message--error { color: var(--color-danger); white-space: normal; }
 @media (prefers-reduced-motion: reduce) { .job__bar-fill { transition: none; } }
 
+.sidebar__folders { margin-left: auto; }
+
+.folders-dialog { width: min(100% - 2 * var(--space-6), 520px); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-raised); color: var(--color-text-primary); box-shadow: var(--shadow-lg); }
+.folders-dialog::backdrop { background: var(--color-scrim); }
+.folders-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.folders-dialog__header h2 { margin: 0; font: 600 17px/1.3 var(--font-display); }
+.folders-dialog__intro, .folders-dialog__empty { margin: var(--space-2) 0 var(--space-4); color: var(--color-text-secondary); font-size: 13px; line-height: 1.5; }
+.folders-dialog__list { display: flex; flex-direction: column; gap: var(--space-1); margin: 0 0 var(--space-4); padding: 0; list-style: none; }
+.folders-dialog__list li { display: flex; align-items: center; gap: var(--space-2); min-height: 36px; padding: 0 var(--space-2) 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 13px; }
+.folders-dialog__list .icon { flex: none; color: var(--color-accent); }
+.folders-dialog__path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.folders-dialog__message { margin: 0 0 var(--space-4); font-size: 13px; line-height: 1.5; }
+.folders-dialog__message--error { color: var(--color-danger); }
+.folders-dialog__message--info { color: var(--color-text-secondary); }
+.folders-dialog__actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+.folders-dialog__button { display: inline-flex; align-items: center; gap: var(--space-2); height: 34px; padding: 0 var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: transparent; color: var(--color-text-primary); cursor: pointer; font-size: 13px; }
+.folders-dialog__button:hover:not(:disabled) { background: var(--color-hover); }
+.folders-dialog__button:disabled { opacity: 0.5; cursor: default; }
+.folders-dialog__button--primary { border-color: transparent; background: var(--color-accent); color: var(--color-accent-contrast); }
+.folders-dialog__button--primary:hover:not(:disabled) { background: var(--color-accent); filter: brightness(1.08); }
+
 .sidebar__footer {
   display: flex;
   align-items: center;
@@ -190,6 +211,17 @@ kbd {
 /* ---------- Chat column ---------- */
 
 .chat-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+.health-banner { display: flex; align-items: flex-start; gap: var(--space-3); margin: var(--space-3) var(--space-4) 0; padding: var(--space-3) var(--space-4); border: 1px solid color-mix(in srgb, var(--color-warning) 45%, transparent); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-warning) 8%, var(--color-surface-raised)); }
+.health-banner--error { border-color: color-mix(in srgb, var(--color-danger) 45%, transparent); background: color-mix(in srgb, var(--color-danger) 7%, var(--color-surface-raised)); }
+.health-banner__list { display: flex; flex: 1; flex-direction: column; gap: var(--space-3); min-width: 0; margin: 0; padding: 0; list-style: none; }
+.health-banner__item { display: flex; gap: var(--space-3); font-size: 13px; line-height: 1.5; }
+.health-banner__item > .icon { flex: none; margin-top: 1px; color: var(--color-warning); }
+.health-banner__item--error > .icon { color: var(--color-danger); }
+.health-banner__detail { color: var(--color-text-secondary); }
+.health-banner__fix { margin: var(--space-1) 0 0; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; }
+.health-banner__retry { display: inline-flex; flex: none; align-items: center; gap: var(--space-1); height: 30px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); color: var(--color-text-primary); cursor: pointer; font-size: 12px; }
+.health-banner__retry:hover { background: var(--color-hover); }
 
 .chat-header {
   display: flex;
