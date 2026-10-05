@@ -1,5 +1,5 @@
 // Electron main process: starts the Python API and Ollama if they aren't already running, opens the window,
-// and forwards the renderer's IPC requests (streaming chat, conversations, revealing files) to the local API.
+// and forwards the renderer's IPC requests (streaming chat, conversations, background jobs, revealing files) to the local API.
 
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('node:path');
@@ -11,6 +11,8 @@ const { createApiClient } = require('./api/client.cjs');
 const API_BASE_URL = 'http://127.0.0.1:8000'; // loopback only — ADR-015
 const CHAT_STREAM_URL = 'ws://127.0.0.1:8000/chat/stream';
 const CHAT_SUBPROTOCOL = 'locali.chat.v1'; // event contract version, see docs/CHAT_EVENTS.md
+const JOB_EVENTS_URL = 'ws://127.0.0.1:8000/jobs/events';
+const JOB_SUBPROTOCOL = 'locali.jobs.v1'; // see docs/JOB_EVENTS.md
 const TOKEN_PATH = path.join(app.getPath('userData'), 'api-token');
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
@@ -109,6 +111,7 @@ if (process.platform === 'win32') app.setAppUserModelId('com.locali.desktop');
 app.whenReady().then(async () => {
   await startLocalServices();
   createWindow();
+  connectJobEvents();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -230,6 +233,50 @@ ipcMain.handle('api:conversations:rename', (_event, { id, title }) => api.rename
 
 ipcMain.handle('api:conversations:delete', (_event, { id }) => api.deleteConversation(id));
 
+// One /jobs/events socket for the whole session; every job event goes to every window. It reconnects
+// if the backend restarts, and tells the windows to reload the job list since events may have been missed.
+let jobEventsSocket = null;
+let jobEventsRetry = null;
+let quitting = false;
+
+function sendToWindows(channel, payload) {
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send(channel, payload);
+}
+
+function connectJobEvents() {
+  const token = getAuthToken();
+  const ws = new WebSocket(JOB_EVENTS_URL, JOB_SUBPROTOCOL, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  jobEventsSocket = ws;
+
+  ws.on('open', () => sendToWindows('api:jobs:sync'));
+  ws.on('message', (raw) => {
+    let payload;
+    try {
+      payload = JSON.parse(raw.toString());
+    } catch {
+      return;
+    }
+    if (payload.type === 'job') sendToWindows('api:jobs:event', payload.job); // ignore event types this client doesn't know
+  });
+  ws.on('error', () => {}); // 'close' follows and schedules the retry
+  ws.on('close', () => {
+    if (jobEventsSocket === ws) jobEventsSocket = null;
+    if (!quitting) jobEventsRetry = setTimeout(connectJobEvents, 2000);
+  });
+}
+
+function disconnectJobEvents() {
+  quitting = true;
+  clearTimeout(jobEventsRetry);
+  jobEventsSocket?.close();
+}
+
+ipcMain.handle('api:jobs:list-active', () => api.listActiveJobs());
+
+ipcMain.handle('api:jobs:cancel', (_event, { id }) => api.cancelJob(id));
+
 ipcMain.handle('api:files:reveal', (_event, { relativePath }) => {
   if (typeof relativePath !== 'string') {
     throw new Error('Refused: reveal path must be relative to the workspace root');
@@ -247,4 +294,7 @@ ipcMain.handle('api:files:reveal', (_event, { relativePath }) => {
   shell.showItemInFolder(resolved);
 });
 
-app.on('before-quit', stopLocalServices);
+app.on('before-quit', () => {
+  disconnectJobEvents();
+  stopLocalServices();
+});

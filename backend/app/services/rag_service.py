@@ -1,55 +1,52 @@
 """Ingestion and search use cases.
 
-Ingestion runs in one background thread at a time, so the HTTP request returns at once and the
-client polls the status. When a run finishes, the keyword-search caches are rebuilt so newly
-indexed files are searchable straight away.
-"""
+Ingestion runs as an `ingest` background job (app/jobs/worker.py): the HTTP request returns at once
+with the job, progress is reported per file, and the job can be cancelled. Only one ingestion can be
+queued or running at a time. When a run ends, the keyword-search caches are rebuilt so newly indexed
+files are searchable straight away.
 
-import threading
-import time
+Importing this module registers the `ingest` job kind; app/api/main.py imports it through the routers.
+"""
 
 from app.ai.ingestion import ingest_all, prune_stale, reset_index
 from app.ai.retrieval import retrieve
 from app.ai.retrieval.sparse_retriever import invalidate_caches
+from app.db import database
+from app.jobs import worker
 
-_lock = threading.Lock()
-_status = {"state": "idle", "full_reset": False, "started_at": None, "finished_at": None, "result": None, "error": None}
+INGEST_KIND = "ingest"
 
 
-def run_ingestion(full_reset=False):
-    """Run ingestion in the calling thread and return its counts."""
+def run_ingestion(full_reset=False, report=None):
+    """Run ingestion in the calling thread and return its counts. `report` is passed to the pipeline."""
     try:
         if full_reset:
             reset_index()
-        result = ingest_all()
-        result["pruned"] = prune_stale()
+        result = ingest_all(report=report)
+        result["pruned"] = prune_stale(report=report)
         return result
     finally:
         invalidate_caches()
 
 
-def _background_run(full_reset):
-    try:
-        result = run_ingestion(full_reset)
-        _status.update(state="done", result=result)
-    except Exception as error:
-        _status.update(state="failed", error=str(error))
-    finally:
-        _status["finished_at"] = time.time()
-        _lock.release()
+@worker.handler(INGEST_KIND, single_flight=True)
+def run_ingest_job(params, ctx):
+    def report(current, total, message):
+        ctx.check_cancelled()
+        ctx.progress(current, total, message)
+
+    return run_ingestion(bool(params.get("full_reset")), report)
 
 
 def start_ingestion(full_reset=False):
-    """Start ingestion in the background. Returns False if a run is already in progress."""
-    if not _lock.acquire(blocking=False):
-        return False
-    _status.update(state="running", full_reset=full_reset, started_at=time.time(), finished_at=None, result=None, error=None)
-    threading.Thread(target=_background_run, args=(full_reset,), name="ingestion", daemon=True).start()
-    return True
+    """Queue an ingestion job and return it. Raises worker.JobAlreadyActive if one is queued or running."""
+    return database.get_job(worker.submit(INGEST_KIND, {"full_reset": full_reset}))
 
 
-def ingestion_status():
-    return dict(_status)
+def latest_ingestion():
+    """The most recent ingestion job, or None if there has never been one."""
+    jobs = database.list_jobs(limit=1, kind=INGEST_KIND)
+    return jobs[0] if jobs else None
 
 
 def search(query, k=4, project=None):

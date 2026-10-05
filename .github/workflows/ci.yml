@@ -34,6 +34,10 @@ jobs:
       - name: Run tests
         run: uv run --locked pytest -q
 
+      # The desktop API client is generated from this file, so a backend route change must re-export it.
+      - name: Check the API description is up to date
+        run: uv run --locked python -m scripts.export_openapi --check
+
   desktop:
     runs-on: ubuntu-latest
     defaults:
@@ -53,3 +57,11 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Check the generated API types are up to date
+        run: |
+          npm run generate:api
+          git diff --exit-code electron/api/schema.d.ts
+
+      - name: Type-check the API client
+        run: npm run typecheck

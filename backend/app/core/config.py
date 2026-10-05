@@ -27,6 +27,7 @@ class ModelSettings:
 
 @dataclass(frozen=True)
 class LimitSettings:
+    job_events_poll_seconds: float = 0.5  # how often /jobs/events looks for changed jobs
     rerank_candidates: int = 20  # how wide the hybrid merge fetches
     rerank_top_n: int = 5  # what actually reaches the prompt
     rerank_max_length: int = 512
@@ -34,6 +35,7 @@ class LimitSettings:
     rerank_timeout_ms: int = 3000
     job_poll_seconds: float = 1.0  # how often the idle job worker checks for queued jobs
     job_progress_interval_seconds: float = 1.0  # a job's progress is saved at most this often
+    job_cancel_check_seconds: float = 0.5  # a running job reads its cancel flag at most this often
 
 
 @dataclass(frozen=True)
@@ -202,6 +204,8 @@ RERANK_BATCH_SIZE = LIMITS.rerank_batch_size
 RERANK_TIMEOUT_MS = LIMITS.rerank_timeout_ms
 JOB_POLL_SECONDS = LIMITS.job_poll_seconds
 JOB_PROGRESS_INTERVAL_SECONDS = LIMITS.job_progress_interval_seconds
+JOB_CANCEL_CHECK_SECONDS = LIMITS.job_cancel_check_seconds
+JOB_EVENTS_POLL_SECONDS = LIMITS.job_events_poll_seconds
 
 VECTOR_DIR = PATHS.vector_dir
 DB_PATH = PATHS.db_path

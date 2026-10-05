@@ -3,29 +3,43 @@ thread inside the backend runs them oldest first, never two for the same project
 
 A job kind is a function registered with @handler("kind"). It receives the job's params and a
 JobContext for reporting progress and checking for cancellation, and returns a JSON-serialisable
-result. Use submit() to queue a job.
+result. Use submit() to queue a job. A kind registered with single_flight=True is refused while
+another job of that kind is queued or running.
 """
 
 import logging
 import threading
 import time
 
-from app.core.config import JOB_POLL_SECONDS, JOB_PROGRESS_INTERVAL_SECONDS
+from app.core.config import JOB_CANCEL_CHECK_SECONDS, JOB_POLL_SECONDS, JOB_PROGRESS_INTERVAL_SECONDS
 from app.db import database
 
 log = logging.getLogger(__name__)
 
 HANDLERS = {}
+SINGLE_FLIGHT = set()  # kinds that can't be queued while one of them is queued or running
 
 
-def handler(kind):
+def handler(kind, single_flight=False):
     """Registers the decorated function as the handler for jobs of this kind."""
 
     def register(fn):
         HANDLERS[kind] = fn
+        if single_flight:
+            SINGLE_FLIGHT.add(kind)
         return fn
 
     return register
+
+
+class JobAlreadyActive(Exception):
+    """Raised by submit() for a single-flight kind that already has a job queued or running."""
+
+    def __init__(self, kind, job=None):
+        self.kind = kind
+        self.job = job
+        where = f" (job {job['id']}, {job['state']})" if job else ""
+        super().__init__(f"A {kind} job is already queued or running{where}. Wait for it to finish or cancel it first.")
 
 
 class JobCancelled(Exception):
@@ -39,6 +53,7 @@ class JobContext:
         self.job_id = job_id
         self._clock = clock
         self._last_saved = None
+        self._last_cancel_check = None
 
     def progress(self, current, total=None, message=None):
         # Saved at most once per JOB_PROGRESS_INTERVAL_SECONDS, so a job reporting every file
@@ -49,7 +64,14 @@ class JobContext:
             self._last_saved = now
 
     def check_cancelled(self):
-        """Call between steps of a long job; raises JobCancelled if someone cancelled it."""
+        """Call between steps of a long job; raises JobCancelled if someone cancelled it.
+
+        Reads the database at most once per JOB_CANCEL_CHECK_SECONDS, so calling it for every file is cheap.
+        """
+        now = self._clock()
+        if self._last_cancel_check is not None and now - self._last_cancel_check < JOB_CANCEL_CHECK_SECONDS:
+            return
+        self._last_cancel_check = now
         if database.is_cancel_requested(self.job_id):
             raise JobCancelled()
 
@@ -136,8 +158,14 @@ def stop_worker():
 
 
 def submit(kind, params=None, project="default"):
-    """Queues a job and returns its id. It runs as soon as its project has no other job running."""
-    job_id = database.enqueue_job(kind, params, project)
+    """Queues a job and returns its id. It runs as soon as its project has no other job running.
+
+    Raises JobAlreadyActive for a single-flight kind that already has a job queued or running.
+    """
+    job_id = database.enqueue_job(kind, params, project, single_flight=kind in SINGLE_FLIGHT)
+    if job_id is None:
+        active = database.list_jobs(("queued", "running"), 1, kind=kind)
+        raise JobAlreadyActive(kind, active[0] if active else None)
     if _worker is not None:
         _worker.wake()
     return job_id

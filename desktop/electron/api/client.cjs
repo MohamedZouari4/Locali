@@ -52,6 +52,12 @@ function createApiClient(baseUrl, getToken) {
     /** @param {string} id */
     deleteConversation: (id) =>
       unwrap(client.DELETE('/conversations/{conversation_id}', { params: { path: { conversation_id: id } } })),
+
+    // Queued and running jobs, newest first; live changes arrive on the /jobs/events socket.
+    listActiveJobs: () => unwrap(client.GET('/jobs', { params: { query: { state: ['queued', 'running'] } } })),
+
+    /** @param {string} id */
+    cancelJob: (id) => unwrap(client.POST('/jobs/{job_id}/cancel', { params: { path: { job_id: id } } })),
   };
 }
 

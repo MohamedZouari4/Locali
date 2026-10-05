@@ -130,6 +130,10 @@ All settings live in [backend/app/core/config.py](backend/app/core/config.py), g
 | `RERANK_MAX_LENGTH` | `512` | Maximum token length of each query/chunk pair given to the cross-encoder. |
 | `RERANK_BATCH_SIZE` | `16` | Pairs scored per cross-encoder batch. |
 | `RERANK_TIMEOUT_MS` | `3000` | If reranking takes longer than this, the merged order is used instead. |
+| `JOB_POLL_SECONDS` | `1.0` | How often the idle background-job worker checks for queued jobs. |
+| `JOB_PROGRESS_INTERVAL_SECONDS` | `1.0` | A running job's progress is saved at most this often. |
+| `JOB_EVENTS_POLL_SECONDS` | `0.5` | How often `/jobs/events` looks for changed jobs. |
+| `JOB_CANCEL_CHECK_SECONDS` | `0.5` | A running job reads its cancel flag at most this often, so checking per file stays cheap. |
 
 ### Paths (`PathSettings`)
 
@@ -200,9 +204,14 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | `GET` | `/conversations/{id}` | One chat with its `messages` (`role`, `content`, `sources`, `status`: `complete`, `incomplete` or `streaming`); `404` if unknown. |
 | `PATCH` | `/conversations/{id}` | Renames a chat; body `{ "title": "..." }` (1–200 characters). |
 | `DELETE` | `/conversations/{id}` | Deletes a chat and its messages; `204`, or `404` if unknown. |
+| `POST` | `/jobs` | Starts a background job; body `{ "kind": "...", "params": {...} }`; `202`, or `422` for an unknown kind. |
+| `GET` | `/jobs?state=...&limit=50` | Jobs newest first, optionally only some states. |
+| `GET` | `/jobs/{id}` | One job with its state, progress and result or error; `404` if unknown. |
+| `POST` | `/jobs/{id}/cancel` | Cancels a queued job at once; a running job stops at its next check. |
+| `WS` | `/jobs/events` | Pushes a `job` event whenever a job changes. See [docs/JOB_EVENTS.md](docs/JOB_EVENTS.md). |
 | `GET` | `/search?q=...&k=4&project=...` | Returns shortened retrieved chunks and source paths. |
-| `POST` | `/ingest?full_reset=false` | Starts ingestion in the background: `202`, or `409` if a run is in progress. |
-| `GET` | `/ingest/status` | `state` (`idle`, `running`, `done`, `failed`), timestamps, counts or error. |
+| `POST` | `/ingest?full_reset=false` | Queues an `ingest` job and returns it: `202`, or `409` if one is already queued or running. Follow it with `/jobs/{id}` or `/jobs/events`. |
+| `GET` | `/ingest/status` | The most recent `ingest` job (state, progress, counts or error), or `null` if indexing has never run. |
 | `GET` | `/files?path=.` | Lists a folder inside `ALLOWED_ROOT`. |
 | `POST` | `/files/move` | Moves a file inside `ALLOWED_ROOT`; body `{ "src": "...", "dst": "..." }`. |
 | `POST` | `/files/organize` | Sorts a folder's files by extension; body `{ "folder": "..." }`. |
@@ -225,12 +234,15 @@ uv run ruff format --check .
 uv run pytest -q
 ```
 
-The integration test needs Ollama and both models, and is skipped otherwise. To also test the real reranker model, set `RERANK_INTEGRATION=1` before `uv run pytest`. Desktop checks, from `desktop/`: `npm run lint` and `npm run build`. On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`. CI runs the same checks on every push and pull request to `main`; pre-commit runs ruff and the desktop lint locally.
+The integration test needs Ollama and both models, and is skipped otherwise. To also test the real reranker model, set `RERANK_INTEGRATION=1` before `uv run pytest`. Desktop checks, from `desktop/`: `npm run lint`, `npm run typecheck` and `npm run build`.
+
+The desktop API client is generated from the backend's OpenAPI description. After changing a backend route, run `uv run python -m scripts.export_openapi` in `backend/`, then `npm run generate:api` in `desktop/`, and commit both generated files (`desktop/electron/api/openapi.json` and `schema.d.ts`). CI fails if either is out of date or the client no longer type-checks.
+
+On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`. CI runs the same checks on every push and pull request to `main`; pre-commit runs ruff and the desktop lint locally.
 
 ## Known limitations
 
-- Ingestion has no progress percentage or cancel; `GET /ingest/status` reports only state and final counts.
-- The desktop sidebar, file counts and context panel still show placeholder data.
+- Attachments, settings, workspace statistics and the context panel are hidden until the backend supports them.
 - Source chips can only reveal files inside the workspace folder; indexed files elsewhere are refused.
 - Electron Builder packages only `dist/` and Electron files. It does not bundle Python, the backend, Tesseract, or Ollama models.
 - The cross-encoder may download from Hugging Face on first use unless already cached.

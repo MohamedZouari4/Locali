@@ -28,11 +28,13 @@ def file_hash(filepath, chunk_size=1024 * 1024):
     return digest.hexdigest()
 
 
-def prune_stale(progress_every=2000):
+def prune_stale(progress_every=2000, report=None):
     """Remove index entries whose source file no longer exists or no longer
     satisfies the current scan/exclusion rules (e.g. it moved out of SCAN_DRIVES,
     or a directory it lives under was added to IGNORE_DIRS/PRIVACY_EXCLUDE since
     it was indexed).
+
+    `report(current, total, message)`, when given, is called before each source is checked.
     """
     # Every path counts as excluded when no roots are configured, so pruning would wipe the index.
     if not config.SCAN_DRIVES:
@@ -41,6 +43,8 @@ def prune_stale(progress_every=2000):
     sources = store.indexed_sources()
     removed = 0
     for checked, source in enumerate(sources, start=1):
+        if report:
+            report(checked - 1, len(sources), "Removing deleted files from the index")
         if checked % progress_every == 0:
             print(f"...checked {checked} sources, removed {removed} so far")
         if not os.path.exists(source) or is_excluded_path(source):
@@ -50,19 +54,37 @@ def prune_stale(progress_every=2000):
     return removed
 
 
-def ingest_all(max_size_mb=MAX_FILE_SIZE_MB, progress_every=500):
+def ingest_all(max_size_mb=MAX_FILE_SIZE_MB, progress_every=500, report=None):
+    """Index every new or changed file under SCAN_DRIVES and return the counts.
+
+    `report(current, total, message)`, when given, is called while files are being found and
+    before each file is processed. It may raise to stop the run, as a cancelled job does; the
+    files indexed so far stay indexed.
+    """
     if not config.SCAN_DRIVES:
         print("No scan roots configured (SCAN_DRIVES is empty); nothing to ingest.")
         return {"indexed": 0, "chunks": 0, "skipped": 0, "unchanged": 0, "scanned": 0}
-    chunk_total, indexed, skipped, unchanged, scanned = 0, 0, 0, 0, 0
+    chunk_total, indexed, skipped, unchanged = 0, 0, 0, 0
     start_time = time.time()
+
+    # Find the files first, so progress can show a total.
+    paths = []
     for path in walk_data_dir(config.SCAN_DRIVES):
-        scanned += 1
+        paths.append(path)
+        if report:
+            report(len(paths), None, f"Finding files ({len(paths):,} so far)")
+    total = len(paths)
+    print(f"Found {total} files in {time.time() - start_time:.0f}s")
+
+    for scanned, path in enumerate(paths, start=1):
+        # Outside the per-file try below, so an exception from `report` stops the run instead of skipping a file.
+        if report:
+            report(scanned - 1, total, f"Indexing {os.path.basename(path)}")
         if scanned % progress_every == 0:
             elapsed = time.time() - start_time
             rate = scanned / elapsed
             print(
-                f"...scanned {scanned} files in {elapsed:.0f}s ({rate:.1f} files/s) "
+                f"...scanned {scanned} of {total} files in {elapsed:.0f}s ({rate:.1f} files/s) "
                 f"- indexed {indexed}, unchanged {unchanged}, skipped {skipped}"
             )
 
@@ -116,9 +138,9 @@ def ingest_all(max_size_mb=MAX_FILE_SIZE_MB, progress_every=500):
     elapsed = time.time() - start_time
     print(
         f"Indexed {indexed} files ({chunk_total} chunks), skipped {skipped} unsupported/empty/oversized files, "
-        f"{unchanged} unchanged, {scanned} scanned total in {elapsed:.0f}s"
+        f"{unchanged} unchanged, {total} scanned total in {elapsed:.0f}s"
     )
-    return {"indexed": indexed, "chunks": chunk_total, "skipped": skipped, "unchanged": unchanged, "scanned": scanned}
+    return {"indexed": indexed, "chunks": chunk_total, "skipped": skipped, "unchanged": unchanged, "scanned": total}
 
 
 if __name__ == "__main__":

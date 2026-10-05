@@ -57,6 +57,64 @@ export interface paths {
         patch: operations["rename_conversation_conversations__conversation_id__patch"];
         trace?: never;
     };
+    "/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Jobs
+         * @description Newest first. Repeat `state` to filter, e.g. `?state=queued&state=running`.
+         */
+        get: operations["list_jobs_jobs_get"];
+        put?: never;
+        /** Start Job */
+        post: operations["start_job_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job */
+        get: operations["get_job_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Job
+         * @description A queued job is cancelled at once; a running job stops at its next check (cancel_requested).
+         */
+        post: operations["cancel_job_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ingest": {
         parameters: {
             query?: never;
@@ -81,7 +139,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Ingest Status */
+        /**
+         * Ingest Status
+         * @description The most recent ingestion job, or null if indexing has never run.
+         */
         get: operations["ingest_status_ingest_status_get"];
         put?: never;
         post?: never;
@@ -242,6 +303,67 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** Job */
+        Job: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Project */
+            project: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "done" | "failed" | "cancelled";
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /**
+             * Result
+             * @default null
+             */
+            result: unknown;
+            /**
+             * Error
+             * @default null
+             */
+            error: string | null;
+            /**
+             * Progress Current
+             * @default null
+             */
+            progress_current: number | null;
+            /**
+             * Progress Total
+             * @description Unknown while null; the client shows no percentage then.
+             * @default null
+             */
+            progress_total: number | null;
+            /**
+             * Progress Message
+             * @default null
+             */
+            progress_message: string | null;
+            /**
+             * Cancel Requested
+             * @description A running job stops at its next cancellation check.
+             */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /**
+             * Started At
+             * @default null
+             */
+            started_at: string | null;
+            /**
+             * Finished At
+             * @default null
+             */
+            finished_at: string | null;
+        };
         /** MoveFileRequest */
         MoveFileRequest: {
             /** Src */
@@ -258,6 +380,20 @@ export interface components {
         RenameRequest: {
             /** Title */
             title: string;
+        };
+        /** StartJobRequest */
+        StartJobRequest: {
+            /** Kind */
+            kind: string;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Project
+             * @default default
+             */
+            project: string;
         };
         /** StoredMessage */
         StoredMessage: {
@@ -431,6 +567,19 @@ export interface components {
              * @default null
              */
             project: string | null;
+        };
+        /**
+         * JobEvent
+         * @description A job was queued, made progress or finished. Carries the whole job.
+         */
+        JobEvent: {
+            /**
+             * Type
+             * @default job
+             * @constant
+             */
+            type: "job";
+            job: components["schemas"]["Job"];
         };
     };
     responses: never;
@@ -608,6 +757,141 @@ export interface operations {
             };
         };
     };
+    list_jobs_jobs_get: {
+        parameters: {
+            query?: {
+                state?: ("queued" | "running" | "done" | "failed" | "cancelled")[] | null;
+                limit?: number;
+            };
+            header?: {
+                authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_job_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartJobRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_job_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     trigger_ingest_ingest_post: {
         parameters: {
             query?: {
@@ -627,7 +911,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Job"];
                 };
             };
             /** @description Validation Error */
@@ -658,7 +942,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Job"] | null;
                 };
             };
             /** @description Validation Error */

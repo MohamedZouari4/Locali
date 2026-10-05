@@ -1,12 +1,14 @@
-// Main chat screen: sidebar with saved conversations, message list, and composer with the "Use my docs" toggle.
+// Main chat screen: sidebar with saved conversations and background tasks, message list, and composer with the "Use my docs" toggle.
 // Features without backend support yet (attachments, settings, workspace stats, context panel) are hidden.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useChatStream } from '../../hooks/useChatStream'
 import { useConversations } from '../../hooks/useConversations'
+import { useJobs } from '../../hooks/useJobs'
 import { useTheme } from '../../hooks/useTheme'
 import { BrandMark, Icon } from '../Icon'
 import { ConversationList } from './ConversationList'
+import { JobsPanel } from './JobsPanel'
 import { MessageBubble } from './MessageBubble'
 import './ChatScreen.css'
 
@@ -23,6 +25,7 @@ const narrowScreen = '(max-width: 720px)'
 export function ChatScreen() {
   const { messages, conversationId, sendMessage, retry, stop, loadConversation, newChat } = useChatStream()
   const { conversations, error: conversationsError, refresh, rename, remove } = useConversations()
+  const { jobs, cancel: cancelJob } = useJobs()
   const { theme, toggleTheme } = useTheme()
   const [draft, setDraft] = useState('')
   const [useDocs, setUseDocs] = useState(false)
@@ -128,6 +131,8 @@ export function ChatScreen() {
           <nav className="sidebar__list">
             <ConversationList conversations={conversations} activeId={conversationId} error={conversationsError} onOpen={openConversation} onRename={rename} onDelete={deleteConversation} />
           </nav>
+
+          <JobsPanel jobs={jobs} onCancel={cancelJob} />
 
           <footer className="sidebar__footer">
             <span className={`status ${ollamaReady ? '' : 'status--offline'}`}>

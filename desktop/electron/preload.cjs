@@ -12,6 +12,22 @@ contextBridge.exposeInMainWorld('localiAPI', {
     remove: (id) => ipcRenderer.invoke('api:conversations:delete', { id }),
   },
 
+  jobs: {
+    listActive: () => ipcRenderer.invoke('api:jobs:list-active'),
+    cancel: (id) => ipcRenderer.invoke('api:jobs:cancel', { id }),
+    onEvent: (callback) => {
+      const listener = (_event, job) => callback(job);
+      ipcRenderer.on('api:jobs:event', listener);
+      return () => ipcRenderer.removeListener('api:jobs:event', listener);
+    },
+    // The events socket (re)connected: reload the job list, since events may have been missed.
+    onSync: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on('api:jobs:sync', listener);
+      return () => ipcRenderer.removeListener('api:jobs:sync', listener);
+    },
+  },
+
   files: {
     reveal: (relativePath) =>
       ipcRenderer.invoke('api:files:reveal', { relativePath }),

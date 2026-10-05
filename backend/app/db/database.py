@@ -211,15 +211,20 @@ def _job_from_row(row):
     return job
 
 
-def enqueue_job(kind, params=None, project="default"):
-    """Adds a queued job to the database and returns its ID."""
+def enqueue_job(kind, params=None, project="default", single_flight=False):
+    """Adds a queued job and returns its id.
+
+    With single_flight, adds nothing and returns None if a job of this kind is already queued or
+    running. The check and the insert are one statement, so two requests can't both get through.
+    """
     job_id = str(uuid.uuid4())
     with _transaction() as conn:
-        conn.execute(
-            "INSERT INTO jobs (id, kind, project, params) VALUES (?, ?, ?, ?)",
-            (job_id, kind, project, json.dumps(params or {})),
-        )
-    return job_id
+        inserted = conn.execute(
+            "INSERT INTO jobs (id, kind, project, params) SELECT ?, ?, ?, ?"
+            " WHERE NOT ? OR NOT EXISTS (SELECT 1 FROM jobs WHERE kind = ? AND state IN ('queued', 'running'))",
+            (job_id, kind, project, json.dumps(params or {}), single_flight, kind),
+        ).rowcount
+    return job_id if inserted else None
 
 
 def claim_next_job():
@@ -301,6 +306,26 @@ def recover_interrupted_jobs():
         return conn.execute(
             "UPDATE jobs SET state = 'failed', error = 'Interrupted by a restart', finished_at = CURRENT_TIMESTAMP WHERE state = 'running'"
         ).rowcount
+
+
+def list_jobs(states=None, limit=50, kind=None):
+    """Returns jobs newest first, only those in `states` and of `kind` when given."""
+    conditions, args = [], []
+    if states:
+        conditions.append(f"state IN ({', '.join('?' for _ in states)})")
+        args.extend(states)
+    if kind:
+        conditions.append("kind = ?")
+        args.append(kind)
+    query = "SELECT * FROM jobs"
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
+    args.append(limit)
+    conn = get_connection()
+    rows = conn.execute(query, args).fetchall()
+    conn.close()
+    return [_job_from_row(row) for row in rows]
 
 
 if __name__ == "__main__":
