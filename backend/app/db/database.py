@@ -8,6 +8,7 @@ import sqlite3
 import uuid
 
 from app.core.config import DB_PATH
+from app.db import migrations
 
 _initialized = False
 
@@ -22,94 +23,18 @@ def get_connection():
         _initialized = True
     return conn
 
-
 def init_schema(conn):
-    cur = conn.cursor()
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS conversations (
-            id TEXT PRIMARY KEY,
-            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            title TEXT
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            conversation_id TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('user','assistant','tool')),
-            content TEXT NOT NULL,
-            sources TEXT,
-            status TEXT NOT NULL DEFAULT 'complete' CHECK(status IN ('streaming','complete','incomplete')),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (conversation_id) REFERENCES conversations(id)
-        )
-    """)
-
-    # Databases created before the status column existed get it added; their messages count as complete.
-    columns = {row[1] for row in cur.execute("PRAGMA table_info(messages)")}
-    if "status" not in columns:
-        cur.execute(
-            "ALTER TABLE messages ADD COLUMN status TEXT NOT NULL DEFAULT 'complete' CHECK(status IN ('streaming','complete','incomplete'))"
-        )
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS audit_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            action TEXT NOT NULL,
-            target_path TEXT,
-            result TEXT,
-            success BOOLEAN NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id)")
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS jobs (
-            id TEXT PRIMARY KEY,
-            kind TEXT NOT NULL,
-            project TEXT NOT NULL DEFAULT 'default',
-            state TEXT NOT NULL DEFAULT 'queued' CHECK(state IN ('queued','running','done','failed','cancelled')),
-            params TEXT,
-            result TEXT,
-            error TEXT,
-            progress_current INTEGER,
-            progress_total INTEGER,
-            progress_message TEXT,
-            cancel_requested INTEGER NOT NULL DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            started_at TIMESTAMP,
-            finished_at TIMESTAMP
-        )
-    """)
-    # SQLite itself refuse a second running job in the same project, whatever the code does.
-    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS one_running_job_per_project ON jobs(project) WHERE state = 'running'")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_jobs_state ON jobs(state, created_at)")
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS indexed_folders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            path TEXT NOT NULL UNIQUE,
-            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)")
-
+    """Applies pending schema migrations, then repairs what a previous run left behind."""
+    migrations.migrate(conn, backup_path=DB_PATH)
     # A reply still marked streaming when the server starts was cut off by a crash or shutdown.
-    cur.execute("UPDATE messages SET status = 'incomplete' WHERE status = 'streaming'")
-
-    conn.commit()
-    print(f"Database initialized at {DB_PATH}")
+    with conn:
+        conn.execute("UPDATE messages SET status = 'incomplete' WHERE status = 'streaming'")
+    print(f"Database ready at {DB_PATH} (schema version {migrations.schema_version(conn)})")
 
 
 def init_db():
-    """Initialize the database schema if it doesn't exist."""
-    conn = get_connection()
-    conn.close()
-    print(f"Database initialized at {DB_PATH}")
+    """Creates or migrates the database; called when the Core starts."""
+    get_connection().close()
 
 
 @contextlib.contextmanager

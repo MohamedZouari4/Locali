@@ -54,7 +54,7 @@ backend/                         Python backend (run Python commands from here)
          retrieval/              dense, sparse (BM25), hybrid (RRF), reranker, retriever
          chat/                   orchestrator, prompts, tool_schema
       services/                  use cases between routers and the AI/tool modules
-      db/                        database.py (SQLite)
+      db/                        database.py (SQLite), migrations.py (schema versions)
       tools/                     file_tools.py (sandboxed tools), audit_log.py (hash chain)
       cli.py                     terminal chat
    tests/                        unit, persistence, store, orchestrator, rerank and integration tests
@@ -244,6 +244,19 @@ The integration test needs Ollama and both models, and is skipped otherwise. To 
 The desktop API client is generated from the backend's OpenAPI description. After changing a backend route, run `uv run python -m scripts.export_openapi` in `backend/`, then `npm run generate:api` in `desktop/`, and commit both generated files (`desktop/electron/api/openapi.json` and `schema.d.ts`). CI fails if either is out of date or the client no longer type-checks.
 
 On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`. CI runs the same checks on every push and pull request to `main`; pre-commit runs ruff and the desktop lint locally.
+
+## Changing the database schema
+
+The schema of `assistant.db` is versioned by `backend/app/db/migrations.py`. The version is SQLite's `PRAGMA user_version`, the number of migrations applied, and pending migrations run when the backend starts. Each migration runs in one transaction with its version bump, so a failed migration leaves the database as it was. Before an existing database is migrated, it is copied to `assistant.db.v<N>.bak` (gitignored).
+
+To change the schema:
+
+1. Append a function to `MIGRATIONS`. Never edit, reorder or remove a migration that has been committed; users' databases have already run it.
+2. Run one statement per `conn.execute()`. Never use `executescript()`: it commits the open transaction first.
+3. SQLite's `ALTER TABLE` can only add or rename columns. Any other change rebuilds the table: create the new table, copy the rows, drop the old one, rename.
+4. Add a test in `backend/tests/test_migrations.py` that runs the migration on a database with data in it.
+
+A database migrated by a newer Locali is refused at startup rather than changed.
 
 ## Known limitations
 

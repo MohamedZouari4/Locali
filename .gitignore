@@ -12,6 +12,7 @@ storage/
 AI-Workspace/
 logs/
 assistant.db
+assistant.db.*
 .auth_token
 *.log
 

@@ -20,11 +20,13 @@ from app.api.errors import global_exception_handler
 from app.api.middleware import RequestLoggingMiddleware
 from app.api.routers import chat, conversations, files, folders, health, ingest, jobs, search
 from app.core.config import REPO_ROOT
+from app.db import database
 from app.jobs import demo, worker
 
 
 @asynccontextmanager
 async def lifespan(_app):
+    await asyncio.to_thread(database.init_db)  # applies pending schema migrations
     if os.environ.get("LOCALI_DEMO_JOBS") == "1":
         demo.register()
     # Jobs a previous run left running are marked failed, then queued jobs start running.
