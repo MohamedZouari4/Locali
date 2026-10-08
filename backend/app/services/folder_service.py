@@ -21,9 +21,9 @@ class FolderRefused(ValueError):
 def list_folders():
     return database.list_indexed_folders()
 
-
-def add_folder(path):
-    """Checks and saves a folder, and returns it. Raises FolderRefused with the reason if it can't be indexed."""
+def check_folder(path):
+    """Returns the folder's normalized path. Raises FolderRefused with the reason if it can't be indexed:
+    not a full path, missing, or a system, privacy or ignored folder."""
     if not path or not os.path.isabs(path):
         raise FolderRefused("Choose a folder with a full path, such as D:\\Documents.")
     path = os.path.normpath(path)
@@ -32,7 +32,11 @@ def add_folder(path):
     reason = exclusion_reason(path)
     if reason:
         raise FolderRefused(f"{path} can't be indexed because {reason}.")
+    return path
 
+def add_folder(path):
+    """Checks the folder and adds it to the list, replacing any indexed folders inside it."""
+    path = check_folder(path)
     existing = database.list_indexed_folders()
     for folder in existing:
         if is_under(path, folder["path"]) and is_under(folder["path"], path):

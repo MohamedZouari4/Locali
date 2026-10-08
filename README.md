@@ -206,6 +206,14 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | `GET` | `/conversations/{id}` | One chat with its `messages` (`role`, `content`, `sources`, `status`: `complete`, `incomplete` or `streaming`); `404` if unknown. |
 | `PATCH` | `/conversations/{id}` | Renames a chat; body `{ "title": "..." }` (1–200 characters). |
 | `DELETE` | `/conversations/{id}` | Deletes a chat and its messages; `204`, or `404` if unknown. |
+| `GET` | `/projects` | Projects in name order: `id`, `name`, `instructions`, `created_at`. |
+| `POST` | `/projects` | Creates a project; body `{ "name": "...", "instructions": "..." }`; `201`, or `409` if another project has the name (ignoring case). |
+| `GET` | `/projects/{id}` | One project with its `folders` (`path`, `permission`: `read` or `act`); `404` if unknown. |
+| `PATCH` | `/projects/{id}` | Renames a project or edits its instructions; fields left out are kept; `409` if the name is taken. |
+| `DELETE` | `/projects/{id}` | Deletes a project, its folder list and its chats, never the files in its folders; `204`, or `404` if unknown. |
+| `POST` | `/projects/{id}/folders` | Adds a folder; body `{ "path": "...", "permission": "read" }`; `201`, or `422` with the reason (missing, system/private/ignored folder, already in the project). |
+| `PATCH` | `/projects/{id}/folders/{folder_id}` | Switches a folder between `read` and `act`; body `{ "permission": "act" }`. |
+| `DELETE` | `/projects/{id}/folders/{folder_id}` | Takes a folder off the project; its files are not touched. `204`, or `404` if unknown. |
 | `POST` | `/jobs` | Starts a background job; body `{ "kind": "...", "params": {...} }`; `202`, or `422` for an unknown kind. |
 | `GET` | `/jobs?state=...&limit=50` | Jobs newest first, optionally only some states. |
 | `GET` | `/jobs/{id}` | One job with its state, progress and result or error; `404` if unknown. |

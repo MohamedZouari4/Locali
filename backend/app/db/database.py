@@ -23,7 +23,6 @@ def get_connection():
         _initialized = True
     return conn
 
-
 def init_schema(conn):
     """Applies pending schema migrations, then repairs what a previous run left behind."""
     migrations.migrate(conn, backup_path=DB_PATH)
@@ -289,7 +288,6 @@ def remove_indexed_folder(folder_id):
         conn.execute("DELETE FROM indexed_folders WHERE id = ?", (folder_id,))
     return row["path"]
 
-
 def create_project(name, instructions="", folders=()):
     """Stores a project and its folders, given as (path, permission) pairs, in one transaction and returns it."""
     project_id = str(uuid.uuid4())
@@ -319,6 +317,54 @@ def list_projects():
     rows = conn.execute("SELECT id, name, instructions, created_at FROM projects ORDER BY name").fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+def update_project(project_id, name=None, instructions=None):
+    """Changes the name or instructions given and keeps the rest. Returns False if the project doesn't exist."""
+    with _transaction() as conn:
+        return (
+            conn.execute(
+                "UPDATE projects SET name = COALESCE(?, name), instructions = COALESCE(?, instructions) WHERE id = ?",
+                (name, instructions, project_id),
+            ).rowcount
+            > 0
+        )
+
+
+def delete_project(project_id):
+    """Deletes the project, its folder list, and its conversations with their messages, in one transaction.
+
+    Only rows are deleted, never the files in the project's folders. Returns False if it doesn't exist.
+    """
+    with _transaction() as conn:
+        conn.execute("DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE project_id = ?)", (project_id,))
+        conn.execute("DELETE FROM conversations WHERE project_id = ?", (project_id,))
+        # project_folders rows go with it (ON DELETE CASCADE).
+        return conn.execute("DELETE FROM projects WHERE id = ?", (project_id,)).rowcount > 0
+
+def add_project_folder(project_id, path, permission="read"):
+    """Adds a folder to the project and returns it."""
+    with _transaction() as conn:
+        row = conn.execute(
+            "INSERT INTO project_folders (project_id, path, permission) VALUES (?, ?, ?) RETURNING id, path, permission, added_at",
+            (project_id, path, permission),
+        ).fetchone()
+    return dict(row)
+
+
+def set_project_folder_permission(project_id, folder_id, permission):
+    """Returns the folder with its new permission, or None if the project has no such folder."""
+    with _transaction() as conn:
+        row = conn.execute(
+            "UPDATE project_folders SET permission = ? WHERE id = ? AND project_id = ? RETURNING id, path, permission, added_at",
+            (permission, folder_id, project_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def remove_project_folder(project_id, folder_id):
+    """Takes the folder off the project; its files are not touched. Returns False if the project has no such folder."""
+    with _transaction() as conn:
+        return conn.execute("DELETE FROM project_folders WHERE id = ? AND project_id = ?", (folder_id, project_id)).rowcount > 0
 
 
 if __name__ == "__main__":

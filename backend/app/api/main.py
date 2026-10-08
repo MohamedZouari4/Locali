@@ -18,7 +18,7 @@ from app import chat_events, job_events
 from app.api.deps import verify_token
 from app.api.errors import global_exception_handler
 from app.api.middleware import RequestLoggingMiddleware
-from app.api.routers import chat, conversations, files, folders, health, ingest, jobs, search
+from app.api.routers import chat, conversations, files, folders, health, ingest, jobs, projects, search
 from app.core.config import REPO_ROOT
 from app.db import database
 from app.jobs import demo, worker
@@ -53,6 +53,7 @@ app.include_router(folders.router, tags=["Ingestion"], dependencies=[Depends(ver
 app.include_router(ingest.router, tags=["Ingestion"], dependencies=[Depends(verify_token)])
 app.include_router(search.router, tags=["Search"], dependencies=[Depends(verify_token)])
 app.include_router(files.router, tags=["Files"], dependencies=[Depends(verify_token)])
+app.include_router(projects.router, tags=["Projects"], dependencies=[Depends(verify_token)])
 
 
 @app.get("/favicon.ico", include_in_schema=False)
