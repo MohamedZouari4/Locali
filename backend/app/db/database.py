@@ -23,6 +23,7 @@ def get_connection():
         _initialized = True
     return conn
 
+
 def init_schema(conn):
     """Applies pending schema migrations, then repairs what a previous run left behind."""
     migrations.migrate(conn, backup_path=DB_PATH)
@@ -48,7 +49,7 @@ def _transaction():
         conn.close()
 
 
-def begin_turn(conversation_id, user_text):
+def begin_turn(conversation_id, user_text, project_id=None):
     """Stores the user message and an empty assistant reply marked streaming, in one transaction.
 
     Starts a new conversation, titled after the message, when `conversation_id` is missing or
@@ -59,8 +60,8 @@ def begin_turn(conversation_id, user_text):
         if not known:
             conversation_id = str(uuid.uuid4())
             conn.execute(
-                "INSERT INTO conversations (id, title) VALUES (?, ?)",
-                (conversation_id, user_text.strip()[:60] or None),
+                "INSERT INTO conversations (id, title, project_id) VALUES (?, ?, ?)",
+                (conversation_id, user_text.strip()[:60] or None, project_id),
             )
         conn.execute(
             "INSERT INTO messages (conversation_id, role, content) VALUES (?, 'user', ?)",
@@ -98,7 +99,7 @@ def get_messages(conversation_id):
 
 # Most recently active first: by the newest message, or the start time for an empty conversation.
 _CONVERSATION_SUMMARY = """
-    SELECT c.id, c.title, c.started_at,
+    SELECT c.id, c.title, c.project_id, c.started_at,
            COALESCE(MAX(m.created_at), c.started_at) AS updated_at,
            COUNT(m.id) AS message_count
     FROM conversations c LEFT JOIN messages m ON m.conversation_id = c.id
@@ -287,6 +288,37 @@ def remove_indexed_folder(folder_id):
             return None
         conn.execute("DELETE FROM indexed_folders WHERE id = ?", (folder_id,))
     return row["path"]
+
+
+def create_project(name, instructions="", folders=()):
+    """Stores a project and its folders, given as (path, permission) pairs, in one transaction and returns it."""
+    project_id = str(uuid.uuid4())
+    with _transaction() as conn:
+        conn.execute("INSERT INTO projects (id, name, instructions) VALUES (?, ?, ?)", (project_id, name, instructions))
+        conn.executemany(
+            "INSERT INTO project_folders (project_id, path, permission) VALUES (?, ?, ?)",
+            [(project_id, path, permission) for path, permission in folders],
+        )
+    return get_project(project_id)
+
+
+def get_project(project_id):
+    """Returns the project with its folders in path order, or None if it doesn't exist."""
+    conn = get_connection()
+    row = conn.execute("SELECT id, name, instructions, created_at FROM projects WHERE id = ?", (project_id,)).fetchone()
+    folders = conn.execute(
+        "SELECT id, path, permission, added_at FROM project_folders WHERE project_id = ? ORDER BY path", (project_id,)
+    ).fetchall()
+    conn.close()
+    return {**dict(row), "folders": [dict(f) for f in folders]} if row else None
+
+
+def list_projects():
+    """All projects in name order, without their folders."""
+    conn = get_connection()
+    rows = conn.execute("SELECT id, name, instructions, created_at FROM projects ORDER BY name").fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 
 if __name__ == "__main__":

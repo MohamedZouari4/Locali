@@ -8,7 +8,7 @@ import unittest
 
 from app.db import migrations
 
-TABLES = {"conversations", "messages", "audit_log", "jobs", "indexed_folders"}
+TABLES = {"conversations", "messages", "audit_log", "jobs", "indexed_folders", "projects", "project_folders"}
 
 
 def _add_pinned(conn):
@@ -73,6 +73,15 @@ class MigrationsTestCase(unittest.TestCase):
         self.assertTrue(TABLES <= self._tables())
         self.assertEqual(self.conn.execute("SELECT title FROM conversations").fetchall(), [("from before",)])
         self.assertEqual(self.conn.execute("SELECT content, status FROM messages").fetchall(), [("hi", "complete")])
+
+    def test_existing_conversations_belong_to_no_project_after_projects_are_added(self):
+        migrations.migrate(self.conn, migrations.MIGRATIONS[:1])
+        with self.conn:
+            self.conn.execute("INSERT INTO conversations (id, title) VALUES ('c1', 'kept')")
+
+        migrations.migrate(self.conn)
+
+        self.assertEqual(self.conn.execute("SELECT id, title, project_id FROM conversations").fetchall(), [("c1", "kept", None)])
 
     def test_running_again_applies_nothing(self):
         migrations.migrate(self.conn)

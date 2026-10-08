@@ -95,7 +95,32 @@ def _001_initial(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)")
 
 
-MIGRATIONS = [_001_initial]
+def _002_projects(conn):
+    conn.execute("""
+        CREATE TABLE projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            instructions TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # Read lets the assistant search a folder; Act also lets its tools change files there.
+    conn.execute("""
+        CREATE TABLE project_folders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            path TEXT NOT NULL,
+            permission TEXT NOT NULL DEFAULT 'read' CHECK(permission IN ('read','act')),
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (project_id, path)
+        )
+    """)
+    # NULL is a conversation outside any project; deleting a project keeps its conversations.
+    conn.execute("ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL")
+    conn.execute("CREATE INDEX idx_conversations_project ON conversations(project_id)")
+
+
+MIGRATIONS = [_001_initial, _002_projects]
 
 
 def schema_version(conn):
