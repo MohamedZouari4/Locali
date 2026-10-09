@@ -202,7 +202,7 @@
 
 /* ---------- Variants ---------- */
 
-/* Skipped, reduced motion or already played: everything shown still, no particles. */
+/* Skipped or reduced motion: everything shown still, no particles. */
 .startup-intro.is-static :is(.startup-intro__atmosphere, .startup-intro__mark, .startup-intro__name, .startup-intro__letter, .startup-intro__tagline) {
   animation: none;
 }
@@ -219,11 +219,6 @@
 
 .startup-intro--reduced {
   animation: intro-fade-in 400ms var(--ease-out) both;
-}
-
-/* Only appears if starting takes longer than a moment (QUIET_REVEAL_MS in timeline.js). */
-.startup-intro--quiet {
-  animation: intro-fade-in 300ms var(--ease-out) 300ms both;
 }
 
 /* Dissolve: the brand zooms toward the viewer and blurs while the overlay fades to the app. */

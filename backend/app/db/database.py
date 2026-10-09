@@ -23,6 +23,7 @@ def get_connection():
         _initialized = True
     return conn
 
+
 def init_schema(conn):
     """Applies pending schema migrations, then repairs what a previous run left behind."""
     migrations.migrate(conn, backup_path=DB_PATH)
@@ -288,6 +289,7 @@ def remove_indexed_folder(folder_id):
         conn.execute("DELETE FROM indexed_folders WHERE id = ?", (folder_id,))
     return row["path"]
 
+
 def create_project(name, instructions="", folders=()):
     """Stores a project and its folders, given as (path, permission) pairs, in one transaction and returns it."""
     project_id = str(uuid.uuid4())
@@ -318,6 +320,7 @@ def list_projects():
     conn.close()
     return [dict(row) for row in rows]
 
+
 def update_project(project_id, name=None, instructions=None):
     """Changes the name or instructions given and keeps the rest. Returns False if the project doesn't exist."""
     with _transaction() as conn:
@@ -340,6 +343,7 @@ def delete_project(project_id):
         conn.execute("DELETE FROM conversations WHERE project_id = ?", (project_id,))
         # project_folders rows go with it (ON DELETE CASCADE).
         return conn.execute("DELETE FROM projects WHERE id = ?", (project_id,)).rowcount > 0
+
 
 def add_project_folder(project_id, path, permission="read"):
     """Adds a folder to the project and returns it."""

@@ -9,6 +9,7 @@ import sqlite3
 
 from app.ai.ingestion.walker import is_under
 from app.db import database
+from app.services import project_boundary
 from app.services.folder_service import FolderRefused, check_folder
 
 
@@ -50,3 +51,15 @@ def add_folder(project_id, path, permission):
         if is_under(path, folder["path"]) and is_under(folder["path"], path):
             raise FolderRefused(f"{path} is already in this project.")
     return database.add_project_folder(project_id, path, permission)
+
+
+def check_path(project_id, path):
+    """Returns (resolved path, folder) when the path is inside one of the project's folders; the folder
+    carries its permission ("read" or "act"). Returns None if the project doesn't exist.
+
+    Raises project_boundary.PathRefused with the reason otherwise.
+    """
+    project = database.get_project(project_id)
+    if project is None:
+        return None
+    return project_boundary.check_path(path, project["folders"])

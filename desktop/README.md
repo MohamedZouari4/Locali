@@ -54,9 +54,7 @@ intro ends before that, it shows "Starting local services…" until the services
   silently and the "Sound off" button starts the sound in time with the animation. The choice is
   saved in `localStorage` (`locali-intro-muted`).
 - **Reduced motion:** shows the logo without moving it, plays only the chime, and lasts about 2 s.
-- **Replays:** plays once per session. A reload (`Ctrl+R`) skips it, because `sessionStorage`
-  stores `locali-intro-played`. To see it again, quit and relaunch, or run
-  `sessionStorage.clear()` in DevTools and reload.
+- **Replays:** plays on every load, including a reload (`Ctrl+R`).
 
 **Assets and licences:** the intro uses no third-party assets. The logo is the project's own icon
 (`electron/icons/icon.svg`). The sound is generated in code at runtime, so the intro ships no audio

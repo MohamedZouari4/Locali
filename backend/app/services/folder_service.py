@@ -21,6 +21,7 @@ class FolderRefused(ValueError):
 def list_folders():
     return database.list_indexed_folders()
 
+
 def check_folder(path):
     """Returns the folder's normalized path. Raises FolderRefused with the reason if it can't be indexed:
     not a full path, missing, or a system, privacy or ignored folder."""
@@ -33,6 +34,7 @@ def check_folder(path):
     if reason:
         raise FolderRefused(f"{path} can't be indexed because {reason}.")
     return path
+
 
 def add_folder(path):
     """Checks the folder and adds it to the list, replacing any indexed folders inside it."""

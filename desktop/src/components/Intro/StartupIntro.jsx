@@ -1,7 +1,7 @@
 // Startup intro shown over the app once per launch: particles assemble into the Locali mark, the name
 // and tagline appear with a synthesized sound logo, then it dissolves into the chat screen.
 // It never holds the app back: Esc or "Skip" ends it, and if the local services are still starting
-// when it ends it becomes a loading state until they're ready. A reload in the same session skips it,
+// when it ends it becomes a loading state until they're ready. It plays on every load,
 // and reduced motion gets a short, still version. Timings are in timeline.js.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -9,12 +9,11 @@ import { Icon } from '../Icon'
 import { createIntroAudio } from './introAudio'
 import { startParticleScene } from './logoParticles'
 import { DOT, MARK_COLORS, MARK_VIEWBOX, STEM, TILE } from './mark'
-import { QUIET_REVEAL_MS, SKIPPED_EXIT_MS, TIMELINES } from './timeline'
+import { SKIPPED_EXIT_MS, TIMELINES } from './timeline'
 import './StartupIntro.css'
 
 const NAME = 'Locali'
 const TAGLINE = 'Private AI for your files'
-const PLAYED_KEY = 'locali-intro-played' // sessionStorage
 const MUTED_KEY = 'locali-intro-muted' // localStorage
 
 // Storage can be unavailable (e.g. blocked site data); the intro then just uses the defaults.
@@ -35,7 +34,6 @@ function writeSetting(storage, key, value) {
 }
 
 function chooseVariant() {
-  if (readSetting('sessionStorage', PLAYED_KEY)) return 'quiet'
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full'
 }
 
@@ -70,7 +68,7 @@ function IntroMark() {
 export function StartupIntro({ ready, onDone }) {
   const [variant] = useState(chooseVariant)
   const timeline = TIMELINES[variant]
-  const [introOver, setIntroOver] = useState(variant === 'quiet')
+  const [introOver, setIntroOver] = useState(false)
   const [skipped, setSkipped] = useState(false)
   const [muted, setMuted] = useState(() => readSetting('localStorage', MUTED_KEY) === 'true')
   const [soundBlocked, setSoundBlocked] = useState(false)
@@ -89,8 +87,6 @@ export function StartupIntro({ ready, onDone }) {
   // Start the particles, the sound and the end-of-intro timer from the same moment.
   useEffect(() => {
     startedAt.current = performance.now()
-    if (variant === 'quiet') return undefined
-    writeSetting('sessionStorage', PLAYED_KEY, 'true')
 
     const stopScene = variant === 'full'
       ? startParticleScene(canvasRef.current, logoRef.current, getElapsed, timeline)
@@ -113,14 +109,10 @@ export function StartupIntro({ ready, onDone }) {
   // Dissolve into the app once the animation is over and the services are ready.
   useEffect(() => {
     if (!exiting) return undefined
-    if (variant === 'quiet' && getElapsed() < QUIET_REVEAL_MS) {
-      onDone() // the loading state never became visible, so there's nothing to fade
-      return undefined
-    }
     if (!skipped) audioRef.current?.playOutro()
     const timer = setTimeout(onDone, exitMs)
     return () => clearTimeout(timer)
-  }, [exiting, skipped, exitMs, variant, getElapsed, onDone])
+  }, [exiting, skipped, exitMs, onDone])
 
   const skip = useCallback(() => {
     startedAt.current = performance.now() - (timeline.logoLock + 1000) // the canvas jumps past the assembly

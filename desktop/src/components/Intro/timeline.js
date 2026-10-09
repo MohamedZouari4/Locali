@@ -20,19 +20,6 @@ export const TIMELINES = {
     exitStart: 1800,
     exitDuration: 400,
   },
-  // Already played this session (e.g. after a reload): nothing to watch, only a loading state if needed.
-  quiet: {
-    assembleStart: 0,
-    logoLock: 0,
-    nameStart: 0,
-    taglineStart: 0,
-    exitStart: 0,
-    exitDuration: 400,
-  },
 }
 
 export const SKIPPED_EXIT_MS = 450
-
-// In the quiet variant the loading state only shows once starting takes longer than this,
-// so a fast start doesn't flash it.
-export const QUIET_REVEAL_MS = 600
