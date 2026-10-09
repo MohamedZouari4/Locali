@@ -72,7 +72,7 @@ async function startLocalServices() {
     console.log('[Locali] Ollama already running');
   }
 
-  // Open the window only once both answer, or the renderer's first requests would be refused.
+  // Resolve only once both answer, or the renderer's first requests would be refused.
   const [apiReady, ollamaReady] = await Promise.all([
     backendProcess ? waitForService(`${API_BASE_URL}/health`) : true,
     ollamaProcess ? waitForService('http://127.0.0.1:11434/api/tags') : true,
@@ -90,12 +90,16 @@ function createWindow() {
   const window = new BrowserWindow({
     // Windows draws the .ico sharper in the taskbar; packaged macOS builds take the icon from the app bundle.
     icon: path.join(__dirname, 'icons', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    // Shown once the first frame is painted, on the startup intro's background, so it doesn't flash white.
+    show: false,
+    backgroundColor: '#08090B',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, 'preload.cjs'),
     },
   });
+  window.once('ready-to-show', () => window.show());
 
   if (DEV_SERVER_URL) {
     window.loadURL(DEV_SERVER_URL);
@@ -108,9 +112,16 @@ function createWindow() {
 // Without this, Windows groups the window under electron.exe in dev and shows Electron's icon.
 if (process.platform === 'win32') app.setAppUserModelId('com.locali.desktop');
 
+// The window opens straight away and plays the startup intro while the services start; the renderer
+// asks for this promise (app:services-ready) and mounts the chat screen once it settles.
+let servicesReady = null;
+
+ipcMain.handle('app:services-ready', () => servicesReady);
+
 app.whenReady().then(async () => {
-  await startLocalServices();
+  servicesReady = startLocalServices();
   createWindow();
+  await servicesReady;
   connectJobEvents();
 
   app.on('activate', () => {

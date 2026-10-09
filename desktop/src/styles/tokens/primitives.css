@@ -1,5 +1,6 @@
 :root {
   /* Neutrals */
+  --ink-1000: #08090B;  /* startup intro background */
   --ink-950: #15171B;   /* dark mode sidebar */
   --ink-900: #1A1C22;   /* dark mode bg */
   --ink-800: #22252B;   /* dark mode raised surface (composer, cards) */
@@ -17,6 +18,8 @@
   /* Accent — moss green, both a role color and the "identity" color */
   --moss-600: #2F6659;  /* light mode accent (on paper) */
   --moss-400: #7DBB9C;  /* dark mode accent (on ink) */
+  --moss-500: #3B7C6C;  /* app icon tile, top */
+  --moss-700: #24524A;  /* app icon tile, bottom */
 
   /* Status */
   --red-600: #B3392F;   /* light mode danger */

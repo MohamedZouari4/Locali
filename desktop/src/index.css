@@ -14,7 +14,8 @@
 
 html,
 body,
-#root {
+#root,
+.app-root {
   height: 100%;
 }
 

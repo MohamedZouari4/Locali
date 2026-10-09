@@ -20,6 +20,8 @@ const paths = {
   lock: <><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>,
   alert: <><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></>,
   retry: <path d="M3 12a9 9 0 1 0 9-9 9.8 9.8 0 0 0-6.7 2.7L3 8M3 3v5h5" />,
+  volume: <path d="M11 5 6 9H2v6h4l5 4ZM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" />,
+  volumeOff: <path d="M11 5 6 9H2v6h4l5 4ZM22 9l-6 6M16 9l6 6" />,
 }
 
 export function Icon({ name, size = 16 }) {

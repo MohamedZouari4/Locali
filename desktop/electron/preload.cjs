@@ -3,6 +3,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('localiAPI', {
+  // Resolves once the main process has started (or given up waiting for) the local API and Ollama.
+  servicesReady: () => ipcRenderer.invoke('app:services-ready'),
+
   health: () => ipcRenderer.invoke('api:health'),
 
   conversations: {

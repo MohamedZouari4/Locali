@@ -1,0 +1,316 @@
+/* Startup intro: a full-window overlay that plays once per launch, then dissolves into the app.
+   Always dark, whatever the app theme. Timings come from timeline.js as --t-* custom properties,
+   so the CSS, the canvas and the sound agree. */
+
+.startup-intro {
+  --intro-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--ink-1000);
+  color: var(--ink-100);
+  color-scheme: dark;
+  user-select: none;
+}
+
+/* Vignette over the background layers, under the logo and controls. */
+.startup-intro::after {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 40%, color-mix(in srgb, var(--ink-1000) 85%, transparent) 100%);
+  content: "";
+  pointer-events: none;
+}
+
+.startup-intro__atmosphere {
+  position: absolute;
+  inset: -10%;
+  background:
+    radial-gradient(ellipse 55% 42% at 50% 44%, color-mix(in srgb, var(--moss-500) 28%, transparent), transparent 70%),
+    radial-gradient(ellipse 90% 60% at 50% 115%, color-mix(in srgb, var(--moss-700) 40%, transparent), transparent 70%);
+  animation:
+    intro-fade-in 1600ms var(--ease-out) both,
+    intro-push var(--t-total) linear both;
+}
+
+.startup-intro__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- Logo, name and tagline ---------- */
+
+.startup-intro__stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  margin-bottom: 6vh;
+}
+
+/* No transform here: the canvas reads this box to land the particles exactly on the logo. */
+.startup-intro__logo {
+  position: relative;
+  width: clamp(104px, 16vmin, 156px);
+  aspect-ratio: 1;
+}
+
+.startup-intro__mark {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 18px 40px color-mix(in srgb, var(--moss-700) 60%, transparent));
+  animation: intro-mark-in 700ms var(--intro-ease) var(--t-logo) both;
+}
+
+.startup-intro__shine {
+  transform: translateX(-100%);
+  transform-box: fill-box;
+  animation: intro-shine 1200ms cubic-bezier(0.45, 0, 0.2, 1) calc(var(--t-logo) + 250ms) both;
+}
+
+.startup-intro__bloom {
+  position: absolute;
+  inset: -90%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--moss-400) 34%, transparent), transparent 62%);
+  opacity: 0;
+  animation: intro-bloom 1600ms var(--ease-out) var(--t-logo) both;
+}
+
+/* Anamorphic light streak across the logo as it locks in. */
+.startup-intro__flare {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(92vw, 1200px);
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--moss-400) 70%, transparent) 32%, var(--paper-0) 50%, color-mix(in srgb, var(--moss-400) 70%, transparent) 68%, transparent);
+  opacity: 0;
+  mix-blend-mode: screen;
+  animation: intro-flare 1300ms var(--ease-out) var(--t-logo) both;
+}
+
+.startup-intro__flare::before {
+  position: absolute;
+  inset: -16px 12%;
+  border-radius: inherit;
+  background: inherit;
+  content: "";
+  filter: blur(14px);
+  opacity: 0.45;
+}
+
+.startup-intro__name {
+  display: flex;
+  margin-top: var(--space-8);
+  color: var(--paper-50);
+  font: 600 clamp(30px, 4.6vmin, 44px) / 1.1 var(--font-display);
+  text-shadow: 0 0 28px color-mix(in srgb, var(--moss-400) 35%, transparent);
+  animation: intro-tighten 1500ms var(--intro-ease) var(--t-name) both;
+}
+
+.startup-intro__letter {
+  display: inline-block;
+  animation: intro-letter 900ms var(--intro-ease) calc(var(--t-name) + var(--i) * 55ms) both;
+}
+
+.startup-intro__tagline {
+  margin-top: var(--space-3);
+  color: var(--ink-300);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  animation: intro-rise 900ms var(--intro-ease) var(--t-tagline) both;
+}
+
+/* Shown when the animation is over but the local services are still starting. Positioned under the
+   stage so it doesn't move the logo. */
+.startup-intro__status {
+  position: absolute;
+  top: 100%;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  color: var(--ink-300);
+  font-size: 12px;
+  white-space: nowrap;
+  animation: intro-rise 500ms var(--intro-ease) both;
+}
+
+.startup-intro__progress {
+  position: relative;
+  width: 140px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--ink-300) 18%, transparent);
+}
+
+.startup-intro__progress::after {
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--moss-400), transparent);
+  content: "";
+  animation: intro-progress 1400ms ease-in-out infinite;
+}
+
+/* ---------- Controls ---------- */
+
+.startup-intro__controls {
+  position: absolute;
+  inset: auto var(--space-6) var(--space-6);
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  animation: intro-fade-in 600ms var(--ease-out) 700ms both;
+}
+
+.startup-intro__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--ink-100) 14%, transparent);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--ink-100) 4%, transparent);
+  color: var(--ink-300);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  transition: color var(--duration-fast), background-color var(--duration-fast);
+
+  kbd {
+    color: var(--ink-300);
+    font-size: 10px;
+  }
+}
+
+.startup-intro__button:hover {
+  background: color-mix(in srgb, var(--ink-100) 10%, transparent);
+  color: var(--ink-100);
+}
+
+/* ---------- Variants ---------- */
+
+/* Skipped, reduced motion or already played: everything shown still, no particles. */
+.startup-intro.is-static :is(.startup-intro__atmosphere, .startup-intro__mark, .startup-intro__name, .startup-intro__letter, .startup-intro__tagline) {
+  animation: none;
+}
+
+.startup-intro.is-static :is(.startup-intro__shine, .startup-intro__flare) {
+  animation: none;
+  opacity: 0;
+}
+
+.startup-intro.is-static .startup-intro__bloom {
+  animation: none;
+  opacity: 0.3;
+}
+
+.startup-intro--reduced {
+  animation: intro-fade-in 400ms var(--ease-out) both;
+}
+
+/* Only appears if starting takes longer than a moment (QUIET_REVEAL_MS in timeline.js). */
+.startup-intro--quiet {
+  animation: intro-fade-in 300ms var(--ease-out) 300ms both;
+}
+
+/* Dissolve: the brand zooms toward the viewer and blurs while the overlay fades to the app. */
+.startup-intro.is-exiting {
+  pointer-events: none;
+  animation: intro-dissolve var(--t-exit) cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.startup-intro.is-exiting .startup-intro__stage {
+  animation: intro-zoom-out var(--t-exit) cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+/* ---------- Keyframes ---------- */
+
+@keyframes intro-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes intro-push {
+  to { transform: scale(1.08); }
+}
+
+@keyframes intro-mark-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: scale(0.94);
+  }
+}
+
+@keyframes intro-shine {
+  to { transform: translateX(100%); }
+}
+
+@keyframes intro-bloom {
+  0% { opacity: 0; }
+  25% { opacity: 0.85; }
+  100% { opacity: 0.3; }
+}
+
+@keyframes intro-flare {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scaleX(0.1);
+  }
+
+  18% { opacity: 1; }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scaleX(1);
+  }
+}
+
+@keyframes intro-tighten {
+  from { gap: 0.32em; }
+  to { gap: 0.02em; }
+}
+
+@keyframes intro-letter {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(0.4em);
+  }
+}
+
+@keyframes intro-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes intro-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+@keyframes intro-dissolve {
+  to { opacity: 0; }
+}
+
+@keyframes intro-zoom-out {
+  to {
+    opacity: 0;
+    filter: blur(10px);
+    transform: scale(1.12);
+  }
+}
