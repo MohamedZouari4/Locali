@@ -65,3 +65,23 @@ jobs:
 
       - name: Type-check the API client
         run: npm run typecheck
+
+  # The boundary tests for letter case, short names, junctions and device names only run on Windows.
+  boundary-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run the boundary tests
+        run: uv run --locked pytest -q tests/test_project_boundary.py
