@@ -34,6 +34,7 @@ making the changes by hand.
 | `/ci` | Run every CI check locally |
 | `/notion-update` | Update the Notion Command Center after a ticket |
 | `/update-docs` | Bring the Architecture, RAG Pipeline and Project Documentation pages and the README in line with the code |
+| `/repo-review` | Review an outside repo, map ideas onto the Task Board, record it in Notion after approval |
 
 ## Environment notes
 
