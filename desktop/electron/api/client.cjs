@@ -62,9 +62,19 @@ function createApiClient(baseUrl, getToken) {
     /** @param {string} id */
     getProject: (id) => unwrap(client.GET('/projects/{project_id}', { params: { path: { project_id: id } } })),
 
-    /** @param {string} id @param {string} name @param {string} instructions */
-    updateProject: (id, name, instructions) =>
-      unwrap(client.PATCH('/projects/{project_id}', { params: { path: { project_id: id } }, body: { name, instructions } })),
+    // Leaving ignorePatterns out keeps the project's patterns; changed patterns start a catalog scan.
+    /** @param {string} id @param {string} name @param {string} instructions @param {string[]} [ignorePatterns] */
+    updateProject: (id, name, instructions, ignorePatterns) =>
+      unwrap(
+        client.PATCH('/projects/{project_id}', {
+          params: { path: { project_id: id } },
+          body: { name, instructions, ignore_patterns: ignorePatterns },
+        }),
+      ),
+
+    // Deletes the project, its folder list, catalog and chats; files in its folders are never touched.
+    /** @param {string} id */
+    deleteProject: (id) => unwrap(client.DELETE('/projects/{project_id}', { params: { path: { project_id: id } } })),
 
     /** @param {string} id @param {string} path @param {'read' | 'act'} permission */
     addProjectFolder: (id, path, permission) =>

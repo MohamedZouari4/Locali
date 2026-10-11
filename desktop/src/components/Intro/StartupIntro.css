@@ -164,45 +164,9 @@
   animation: intro-progress 1400ms ease-in-out infinite;
 }
 
-/* ---------- Controls ---------- */
-
-.startup-intro__controls {
-  position: absolute;
-  inset: auto var(--space-6) var(--space-6);
-  z-index: 2;
-  display: flex;
-  justify-content: space-between;
-  animation: intro-fade-in 600ms var(--ease-out) 700ms both;
-}
-
-.startup-intro__button {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: 32px;
-  padding: 0 var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--ink-100) 14%, transparent);
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--ink-100) 4%, transparent);
-  color: var(--ink-300);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  transition: color var(--duration-fast), background-color var(--duration-fast);
-
-  kbd {
-    color: var(--ink-300);
-    font-size: 10px;
-  }
-}
-
-.startup-intro__button:hover {
-  background: color-mix(in srgb, var(--ink-100) 10%, transparent);
-  color: var(--ink-100);
-}
-
 /* ---------- Variants ---------- */
 
-/* Skipped or reduced motion: everything shown still, no particles. */
+/* Reduced motion: everything shown still, no particles. */
 .startup-intro.is-static :is(.startup-intro__atmosphere, .startup-intro__mark, .startup-intro__name, .startup-intro__letter, .startup-intro__tagline) {
   animation: none;
 }

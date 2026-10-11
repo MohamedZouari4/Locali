@@ -1,6 +1,12 @@
 """Catalog scanner: lists the files in a project's folders with their name, type, size and dates, and
 matches them to the project's stored records so that every file keeps a stable identity (its record id).
 
+The walk never follows symbolic links or junctions, so it can't leave the project's folders, and it
+skips what IgnoreRules hides: system, private, dependency and cache folders (the default ignore lists),
+files that may hold keys or credentials, programs, archives and media, files over MAX_FILE_SIZE_MB, and
+whatever the project's own patterns match. Files are skipped by name and size only, so a sensitive file
+is never opened. A full scan counts what it skipped, by reason.
+
 A file is recognised, in this order, by:
 1. the operating system's file identifier (volume and file ID on Windows, device and inode elsewhere),
    which stays the same when a file is renamed or moved within a volume;
@@ -15,19 +21,86 @@ scan_changes builds a partial scan from the paths the file watcher reported; mat
 records under those paths.
 """
 
+import fnmatch
 import hashlib
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from app.ai.ingestion.walker import exclusion_reason, is_under
+from app.ai.ingestion.walker import exclusion_reason, is_sensitive, is_under
 from app.core import config
+
+SKIP_REASONS = ("folders", "sensitive", "binary", "too_large", "project_rules")
 
 
 @dataclass
 class Scan:
     files: list = field(default_factory=list)  # one dict per file, see read_file()
     unreadable: list = field(default_factory=list)  # folders that couldn't be listed; their records are kept
+    skipped: dict = field(default_factory=lambda: dict.fromkeys(SKIP_REASONS, 0))  # by reason, see IgnoreRules
+
+
+class IgnoreRules:
+    """What the catalog skips in one project: the default ignore lists from config, plus the project's own
+    patterns. A pattern without a slash (*.log, drafts) matches a file or folder name anywhere; one with a
+    slash (data/raw/*.csv, /notes) matches the path from the project folder; a trailing slash (drafts/)
+    matches folders only. Names are compared ignoring case. A project folder itself is never hidden by a pattern.
+    """
+
+    def __init__(self, folders, patterns=()):
+        self.folders = list(folders)
+        self.patterns = [pattern.lower() for pattern in patterns]
+
+    def _matches(self, path, is_dir):
+        root = max((folder for folder in self.folders if is_under(path, folder)), key=len, default=None)
+        if root is None or not self.patterns:
+            return False
+        relative = os.path.relpath(path, root).replace(os.sep, "/").lower()
+        if relative == ".":
+            return False
+        name = os.path.basename(path).lower()
+        for pattern in self.patterns:
+            if pattern.endswith("/") and not is_dir:
+                continue
+            anchored = "/" in pattern.rstrip("/")
+            if fnmatch.fnmatchcase(relative if anchored else name, pattern.strip("/")):
+                return True
+        return False
+
+    def skip_folder(self, path):
+        """The reason a folder is skipped with everything in it, or None."""
+        if exclusion_reason(path):
+            return "folders"
+        if self._matches(path, is_dir=True):
+            return "project_rules"
+        return None
+
+    def skip_file(self, path):
+        """The reason a file is skipped, judged by its name only (it isn't opened), or None."""
+        name = os.path.basename(path)
+        if is_sensitive(name):
+            return "sensitive"
+        if "." in name and name.rsplit(".", 1)[-1].lower() in config.SKIP_EXTENSIONS:
+            return "binary"
+        if self._matches(path, is_dir=False):
+            return "project_rules"
+        return None
+
+    def skip_changed(self, path, is_dir):
+        """The reason a path the watcher reported is skipped, checking every folder above it up to and
+        including its project folder, or None."""
+        folder = os.path.dirname(path)
+        while any(is_under(folder, root) for root in self.folders):
+            if reason := self.skip_folder(folder):
+                return reason
+            if any(is_under(root, folder) for root in self.folders):
+                break  # that was the project folder
+            folder = os.path.dirname(folder)
+        return self.skip_folder(path) if is_dir else self.skip_file(path)
+
+
+def _too_large(file):
+    return file["size"] > config.MAX_FILE_SIZE_MB * 1024 * 1024
 
 
 def _timestamp(seconds):
@@ -62,16 +135,18 @@ def read_file(path):
     }
 
 
-def scan(folders, report=None):
-    """Walks the folders and returns a Scan. `report(count, folder)` is called after each file found;
-    an exception it raises (such as a cancelled job) stops the walk."""
+def scan(rules, report=None, start=None):
+    """Walks the project's folders (an IgnoreRules), or only the `start` folders inside them, and returns
+    a Scan. `report(count, folder)` is called after each file found; an exception it raises (such as a
+    cancelled job) stops the walk."""
     result = Scan()
     seen = set()
-    for root in folders:
+    for root in start or rules.folders:
         stack = [root]
         while stack:
             folder = stack.pop()
-            if exclusion_reason(folder):
+            if reason := rules.skip_folder(folder):
+                result.skipped[reason] += 1
                 continue
             try:
                 with os.scandir(folder) as entries:
@@ -84,26 +159,30 @@ def scan(folders, report=None):
                     continue
                 if entry.is_dir(follow_symlinks=False):
                     stack.append(entry.path)
-                elif entry.is_file(follow_symlinks=False) and entry.name not in config.SENSITIVE_FILES:
+                elif entry.is_file(follow_symlinks=False):
                     key = _path_key(entry.path)
                     if key in seen:  # nested project folders reach the same file twice
                         continue
                     seen.add(key)
+                    if reason := rules.skip_file(entry.path):
+                        result.skipped[reason] += 1
+                        continue
                     try:
-                        result.files.append(read_file(entry.path))
+                        file = read_file(entry.path)
                     except OSError:  # deleted since the folder was listed
                         continue
+                    if _too_large(file):
+                        result.skipped["too_large"] += 1
+                        continue
+                    result.files.append(file)
                     if report:
                         report(len(result.files), root)
     return result
 
 
-def _allowed_file(path):
-    return os.path.basename(path) not in config.SENSITIVE_FILES and exclusion_reason(os.path.dirname(path)) is None
-
-
-def scan_changes(paths, folders):
-    """A partial Scan of the changed paths inside `folders`, and the paths it covers (for match's `scope`).
+def scan_changes(paths, rules):
+    """A partial Scan of the changed paths inside the project's folders (an IgnoreRules), and the paths it
+    covers (for match's `scope`). A path the rules hide stays in the scope, so it leaves the catalog.
 
     A changed folder is walked whole, since a folder moved in arrives as one event. A path that no longer
     exists stays in the scope, so its record, or every record under it if it was a folder, is removed
@@ -113,22 +192,23 @@ def scan_changes(paths, folders):
     found = {}
     scope = []
     for path in paths:
-        if not any(is_under(path, folder) for folder in folders):
+        if not any(is_under(path, folder) for folder in rules.folders):
             continue
         scope.append(path)
         if os.path.islink(path) or os.path.isjunction(path):
             continue
+        files = []
         if os.path.isdir(path):
-            partial = scan([path])
-            result.unreadable.extend(partial.unreadable)
-            files = partial.files
-        elif os.path.isfile(path) and _allowed_file(path):
+            if rules.skip_changed(path, is_dir=True) is None:
+                partial = scan(rules, start=[path])
+                result.unreadable.extend(partial.unreadable)
+                files = partial.files
+        elif os.path.isfile(path) and rules.skip_changed(path, is_dir=False) is None:
             try:
-                files = [read_file(path)]
+                file = read_file(path)
+                files = [] if _too_large(file) else [file]
             except OSError:  # deleted again since the event
-                files = []
-        else:
-            files = []
+                pass
         for file in files:
             found[_path_key(file["path"])] = file
     result.files = list(found.values())

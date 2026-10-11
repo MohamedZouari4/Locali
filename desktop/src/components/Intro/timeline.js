@@ -21,5 +21,3 @@ export const TIMELINES = {
     exitDuration: 400,
   },
 }
-
-export const SKIPPED_EXIT_MS = 450

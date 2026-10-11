@@ -18,14 +18,18 @@ export function useConversations(projectId) {
     }
   }, [projectId])
 
+  // Returns whether the conversation was renamed.
   const rename = useCallback(
     async (id, title) => {
+      let renamed = false
       try {
         await window.localiAPI.conversations.rename(id, title)
+        renamed = true
       } catch {
         setError('Could not rename the conversation.')
       }
       await refresh()
+      return renamed
     },
     [refresh],
   )

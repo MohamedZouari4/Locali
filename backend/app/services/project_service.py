@@ -1,14 +1,16 @@
 """Projects: a name, instructions for the assistant, and the folders it may use, each with Read or Act permissions.
 A folder passes the same checks as an indexed folder before it is added (folder_service.check_folder).
+A project can add its own ignore patterns to the default ignore lists; the catalog applies them.
 Deleting a project deletes its folder list, its file catalog and its conversations, never the files in
 its folders. There is no per-project search index yet; when there is, deleting a project must clear it too.
 """
 
+import re
 import sqlite3
 
 from app.ai.ingestion.walker import is_under
 from app.db import database
-from app.services import project_boundary
+from app.services import catalog_service, project_boundary
 from app.services.folder_service import FolderRefused, check_folder
 
 
@@ -39,13 +41,44 @@ def general_project():
         return general_project()
 
 
-def update_project(project_id, name=None, instructions=None):
-    """Returns the updated project, or None if it doesn't exist. Raises ProjectNameTaken."""
+class InvalidPattern(ValueError):
+    """An ignore pattern that isn't a name or a path inside the project's folders."""
+
+
+def clean_patterns(patterns):
+    """Trims the ignore patterns, uses forward slashes and drops empty lines and duplicates.
+
+    Raises InvalidPattern for a full path (C:/..., //server/...) or one that climbs out with "..": a
+    pattern only ever hides files inside the project's folders.
+    """
+    cleaned = []
+    for raw in patterns:
+        pattern = raw.strip().replace("\\", "/")
+        if not pattern:
+            continue
+        if re.match(r"^[A-Za-z]:", pattern) or pattern.startswith("//") or ".." in pattern.split("/"):
+            raise InvalidPattern(f"{raw} isn't allowed. Use a name or a path inside the project's folders, such as *.log or drafts/.")
+        if pattern not in cleaned:
+            cleaned.append(pattern)
+    return cleaned
+
+
+def update_project(project_id, name=None, instructions=None, ignore_patterns=None):
+    """Returns the updated project, or None if it doesn't exist. Raises ProjectNameTaken or InvalidPattern.
+
+    Changed ignore patterns queue a catalog scan, so files they now hide leave the catalog and files they
+    no longer hide come back.
+    """
+    if ignore_patterns is not None:
+        ignore_patterns = clean_patterns(ignore_patterns)
+    before = database.get_project(project_id)
     try:
-        if not database.update_project(project_id, name, instructions):
+        if not database.update_project(project_id, name, instructions, ignore_patterns):
             return None
     except sqlite3.IntegrityError:
         raise _name_taken(name) from None
+    if ignore_patterns is not None and ignore_patterns != before["ignore_patterns"]:
+        catalog_service.start_scan(project_id)
     return database.get_project(project_id)
 
 

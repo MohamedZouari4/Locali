@@ -53,12 +53,11 @@ intro ends before that, it shows "Starting local services…" until the services
 | `logoParticles.js` | Canvas scene: dust and the particles that form the mark |
 | `introAudio.js` | Web Audio synthesis: pad, whoosh, impact, chime and outro |
 | `mark.js` | Logo geometry shared by the SVG and the particle sampler |
-| `StartupIntro.jsx` / `.css` | Overlay, phases, skip, sound toggle, exit |
+| `StartupIntro.jsx` / `.css` | Overlay, phases, exit |
 
-- **Skip:** Esc or the Skip button. Skip ends the intro, or jumps straight to the loading state.
-- **Sound:** Electron allows autoplay. In a plain browser, autoplay may be blocked; the intro then plays
-  silently and the "Sound off" button starts the sound in time with the animation. The choice is
-  saved in `localStorage` (`locali-intro-muted`).
+- **No skipping:** there are no on-screen controls and no key ends it early; it always plays in full.
+- **Sound:** always plays, since Electron allows autoplay. In a plain browser, autoplay may be blocked;
+  the intro then plays silently.
 - **Reduced motion:** shows the logo without moving it, plays only the chime, and lasts about 2 s.
 - **Replays:** plays on every load, including a reload (`Ctrl+R`).
 
@@ -73,7 +72,7 @@ files. Both are covered by the repository's MIT licence.
 | `servicesReady()` | None; resolves once the main process has started (or given up waiting for) the API and Ollama |
 | `health()` | `GET /health/checks`; a "service not running" report if the API can't be reached |
 | `projects.list()` / `projects.create(name, instructions)` | `GET /projects` / `POST /projects` |
-| `projects.get(id)` / `projects.update(id, name, instructions)` | `GET` / `PATCH /projects/{id}` |
+| `projects.get(id)` / `projects.update(id, name, instructions)` / `projects.remove(id)` | `GET` / `PATCH` / `DELETE /projects/{id}` |
 | `projects.chooseFolder(id, permission)` | Opens the native folder picker in the main process, then `POST /projects/{id}/folders`; the page never sends a path |
 | `projects.setFolderPermission(id, folderId, permission)` / `projects.removeFolder(id, folderId)` | `PATCH` / `DELETE /projects/{id}/folders/{folderId}` |
 | `projects.scanFiles(id)` | `POST /projects/{id}/catalog` (runs as a background job) |

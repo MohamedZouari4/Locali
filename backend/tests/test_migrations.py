@@ -123,6 +123,17 @@ class MigrationsTestCase(unittest.TestCase):
         self.assertEqual(self.conn.execute("SELECT project_id FROM conversations").fetchall(), [("p1",)])
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM catalog_files").fetchone()[0], 0)
 
+    def test_projects_get_empty_ignore_patterns_and_no_skipped_counts(self):
+        migrations.migrate(self.conn, migrations.MIGRATIONS[:4])
+        with self.conn:
+            self.conn.execute("INSERT INTO projects (id, name) VALUES ('p1', 'Thesis')")
+
+        migrations.migrate(self.conn)
+
+        self.assertEqual(
+            self.conn.execute("SELECT name, ignore_patterns, catalog_skipped FROM projects").fetchall(), [("Thesis", "[]", None)]
+        )
+
     def test_running_again_applies_nothing(self):
         migrations.migrate(self.conn)
 

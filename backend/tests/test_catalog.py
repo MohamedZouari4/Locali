@@ -160,7 +160,7 @@ class RecordTests(CatalogTestCase):
         if os.name == "nt":
             self.assertIsNotNone(record["file_created_at"])
 
-    def test_the_ignore_rules_apply_but_skipped_extensions_are_listed(self):
+    def test_the_ignore_rules_apply_to_folders_sensitive_files_and_binaries(self):
         _write(os.path.join(self.docs, "keep.txt"))
         _write(os.path.join(self.docs, "photos.zip"))
         _write(os.path.join(self.docs, ".git", "config"))
@@ -169,7 +169,7 @@ class RecordTests(CatalogTestCase):
 
         self._scan()
 
-        self.assertEqual(set(self._catalog()), {"keep.txt", "photos.zip"})
+        self.assertEqual(set(self._catalog()), {"keep.txt"})
 
     def test_links_and_junctions_are_not_followed(self):
         outside = os.path.join(self.tmpdir, "secret")

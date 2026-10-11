@@ -326,7 +326,8 @@ export interface paths {
         head?: never;
         /**
          * Update Project
-         * @description Renames the project or edits its instructions; fields left out are kept.
+         * @description Renames the project or edits its instructions or ignore patterns; fields left out are kept. Changed
+         *     patterns queue a catalog scan.
          */
         patch: operations["update_project_projects__project_id__patch"];
         trace?: never;
@@ -473,6 +474,34 @@ export interface components {
              * @description When the catalog first found the file.
              */
             catalogued_at: string;
+        };
+        /** CatalogSkipped */
+        CatalogSkipped: {
+            /**
+             * Folders
+             * @description System, private, dependency and cache folders, such as node_modules.
+             */
+            folders: number;
+            /**
+             * Sensitive
+             * @description Files that may hold keys or credentials, such as .env or id_rsa; never read.
+             */
+            sensitive: number;
+            /**
+             * Binary
+             * @description Programs, archives and media, such as .exe, .zip or .mp4.
+             */
+            binary: number;
+            /**
+             * Too Large
+             * @description Files over MAX_FILE_SIZE_MB.
+             */
+            too_large: number;
+            /**
+             * Project Rules
+             * @description Files and folders hidden by the project's own ignore patterns.
+             */
+            project_rules: number;
         };
         /** ChatRequest */
         ChatRequest: {
@@ -682,6 +711,13 @@ export interface components {
             /** Folders */
             folders: components["schemas"]["ProjectFolder"][];
             /**
+             * Ignore Patterns
+             * @description The project's own patterns, on top of the default ignore lists.
+             */
+            ignore_patterns: string[];
+            /** @description What the last catalog scan skipped; null before the first scan. */
+            catalog_skipped: components["schemas"]["CatalogSkipped"] | null;
+            /**
              * File Count
              * @description Files in the project's catalog, as of its last scan.
              */
@@ -760,6 +796,11 @@ export interface components {
             name?: string | null;
             /** Instructions */
             instructions?: string | null;
+            /**
+             * Ignore Patterns
+             * @description Replaces the project's ignore patterns. A name pattern (*.log, drafts) matches anywhere; one with a slash (data/raw/*.csv) matches a path from the project's folder; a trailing slash (drafts/) matches only folders.
+             */
+            ignore_patterns?: string[] | null;
         };
         /** ValidationError */
         ValidationError: {

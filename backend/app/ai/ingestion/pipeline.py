@@ -14,10 +14,8 @@ from pathlib import Path
 from app.ai.ingestion import store
 from app.ai.ingestion.chunking import chunk_by_section, make_document_id
 from app.ai.ingestion.extractors import get_source_type, read_text, sniff_mime
-from app.ai.ingestion.walker import is_excluded_path, is_under, scan_roots, walk_data_dir
+from app.ai.ingestion.walker import is_excluded_path, is_sensitive, is_under, scan_roots, walk_data_dir
 from app.core import config
-
-MAX_FILE_SIZE_MB = 25
 
 
 def file_hash(filepath, chunk_size=1024 * 1024):
@@ -75,12 +73,13 @@ def forget_folder(folder, report=None):
     return removed
 
 
-def index_file(path, max_size_mb=MAX_FILE_SIZE_MB):
+def index_file(path, max_size_mb=None):
     """Index one file if it is new or changed. Returns ("indexed", chunk count), ("unchanged", 0) or
     ("skipped", 0) for a skipped extension, an oversized, unsafe, unreadable or empty file."""
     if path.lower().rsplit(".", 1)[-1] in config.SKIP_EXTENSIONS:
         return "skipped", 0
 
+    max_size_mb = max_size_mb or config.MAX_FILE_SIZE_MB
     source = os.path.abspath(path)
     try:
         ext = Path(source).suffix.lower().lstrip(".") or "unknown"
@@ -131,7 +130,7 @@ def index_paths(paths, report=None):
         if report:
             report(done, len(paths), f"Updating {os.path.basename(path)}")
         source = os.path.abspath(path)
-        allowed = os.path.isfile(path) and not is_excluded_path(path, roots) and os.path.basename(path) not in config.SENSITIVE_FILES
+        allowed = os.path.isfile(path) and not is_excluded_path(path, roots) and not is_sensitive(os.path.basename(path))
         status = index_file(path)[0] if allowed else "skipped"
         if status == "skipped" and store.stored_hash(source) is not None:
             store.delete_source(source)
@@ -140,7 +139,7 @@ def index_paths(paths, report=None):
     return counts
 
 
-def ingest_all(max_size_mb=MAX_FILE_SIZE_MB, progress_every=500, report=None):
+def ingest_all(max_size_mb=None, progress_every=500, report=None):
     """Index every new or changed file under the scan roots and return the counts.
 
     `report(current, total, message)`, when given, is called while files are being found and

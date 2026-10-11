@@ -1,37 +1,18 @@
 // Startup intro shown over the app once per launch: particles assemble into the Locali mark, the name
 // and tagline appear with a synthesized sound logo, then it dissolves into the chat screen.
-// It never holds the app back: Esc or "Skip" ends it, and if the local services are still starting
-// when it ends it becomes a loading state until they're ready. It plays on every load,
-// and reduced motion gets a short, still version. Timings are in timeline.js.
+// It always plays in full: there are no controls and no key skips it. If the local services are still
+// starting when it ends, it becomes a loading state until they're ready. It plays on every load, and
+// reduced motion gets a short, still version. Timings are in timeline.js.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Icon } from '../Icon'
 import { createIntroAudio } from './introAudio'
 import { startParticleScene } from './logoParticles'
 import { DOT, MARK_COLORS, MARK_VIEWBOX, STEM, TILE } from './mark'
-import { SKIPPED_EXIT_MS, TIMELINES } from './timeline'
+import { TIMELINES } from './timeline'
 import './StartupIntro.css'
 
 const NAME = 'Locali'
 const TAGLINE = 'Private AI for your files'
-const MUTED_KEY = 'locali-intro-muted' // localStorage
-
-// Storage can be unavailable (e.g. blocked site data); the intro then just uses the defaults.
-function readSetting(storage, key) {
-  try {
-    return window[storage].getItem(key)
-  } catch {
-    return null
-  }
-}
-
-function writeSetting(storage, key, value) {
-  try {
-    window[storage].setItem(key, value)
-  } catch {
-    // Not remembered; nothing else depends on it.
-  }
-}
 
 function chooseVariant() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full'
@@ -69,20 +50,15 @@ export function StartupIntro({ ready, onDone }) {
   const [variant] = useState(chooseVariant)
   const timeline = TIMELINES[variant]
   const [introOver, setIntroOver] = useState(false)
-  const [skipped, setSkipped] = useState(false)
-  const [muted, setMuted] = useState(() => readSetting('localStorage', MUTED_KEY) === 'true')
-  const [soundBlocked, setSoundBlocked] = useState(false)
-  const [canPlaySound] = useState(() => Boolean(window.AudioContext ?? window.webkitAudioContext))
   const canvasRef = useRef(null)
   const logoRef = useRef(null)
   const audioRef = useRef(null)
   const startedAt = useRef(0)
-  const mutedAtStart = useRef(muted) // later changes go through toggleSound, not the start effect
   const getElapsed = useCallback(() => performance.now() - startedAt.current, [])
 
   const exiting = introOver && ready
   const waiting = introOver && !ready
-  const exitMs = skipped ? SKIPPED_EXIT_MS : timeline.exitDuration
+  const exitMs = timeline.exitDuration
 
   // Start the particles, the sound and the end-of-intro timer from the same moment.
   useEffect(() => {
@@ -91,11 +67,10 @@ export function StartupIntro({ ready, onDone }) {
     const stopScene = variant === 'full'
       ? startParticleScene(canvasRef.current, logoRef.current, getElapsed, timeline)
       : () => {}
-    if (!mutedAtStart.current) {
-      const audio = createIntroAudio(timeline, { full: variant === 'full', getElapsed })
-      audioRef.current = audio
-      audio?.start().then((playing) => setSoundBlocked(!playing))
-    }
+    // Electron lets the sound start on its own; where autoplay is blocked (a plain browser), it stays silent.
+    const audio = createIntroAudio(timeline, { full: variant === 'full', getElapsed })
+    audioRef.current = audio
+    audio?.start()
     const timer = setTimeout(() => setIntroOver(true), timeline.exitStart)
 
     return () => {
@@ -109,50 +84,15 @@ export function StartupIntro({ ready, onDone }) {
   // Dissolve into the app once the animation is over and the services are ready.
   useEffect(() => {
     if (!exiting) return undefined
-    if (!skipped) audioRef.current?.playOutro()
+    audioRef.current?.playOutro()
     const timer = setTimeout(onDone, exitMs)
     return () => clearTimeout(timer)
-  }, [exiting, skipped, exitMs, onDone])
-
-  const skip = useCallback(() => {
-    startedAt.current = performance.now() - (timeline.logoLock + 1000) // the canvas jumps past the assembly
-    audioRef.current?.stop()
-    audioRef.current = null
-    setSkipped(true)
-    setIntroOver(true)
-  }, [timeline])
-
-  useEffect(() => {
-    if (introOver) return undefined
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') skip()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [introOver, skip])
-
-  const soundOn = !muted && !soundBlocked
-
-  const toggleSound = () => {
-    if (soundOn) {
-      audioRef.current?.stop()
-      audioRef.current = null
-      setMuted(true)
-      writeSetting('localStorage', MUTED_KEY, 'true')
-      return
-    }
-    setMuted(false)
-    writeSetting('localStorage', MUTED_KEY, 'false')
-    // This click is a user gesture, so the browser now lets the sound start, joining at the current time.
-    const audio = audioRef.current ?? createIntroAudio(timeline, { full: variant === 'full', getElapsed })
-    audioRef.current = audio
-    audio?.start().then((playing) => setSoundBlocked(!playing))
-  }
+  }, [exiting, exitMs, onDone])
 
   const classes = [
     'startup-intro',
     `startup-intro--${variant}`,
-    (skipped || variant !== 'full') && 'is-static',
+    variant !== 'full' && 'is-static',
     exiting && 'is-exiting',
   ].filter(Boolean).join(' ')
 
@@ -194,25 +134,6 @@ export function StartupIntro({ ready, onDone }) {
         )}
       </div>
 
-      {!introOver && (
-        <div className="startup-intro__controls">
-          {canPlaySound ? (
-            <button
-              className="startup-intro__button"
-              type="button"
-              onClick={toggleSound}
-              aria-pressed={soundOn}
-              title={soundOn ? 'Turn sound off' : 'Turn sound on'}
-            >
-              <Icon name={soundOn ? 'volume' : 'volumeOff'} size={15} />
-              <span>{soundOn ? 'Sound on' : 'Sound off'}</span>
-            </button>
-          ) : <span />}
-          <button className="startup-intro__button" type="button" onClick={skip}>
-            Skip <kbd>Esc</kbd>
-          </button>
-        </div>
-      )}
     </section>
   )
 }

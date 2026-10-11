@@ -1,6 +1,6 @@
-// Hook for the project the chat screen works in, and the list to switch between. Every chat belongs to
-// a project. On start it opens the project used last (remembered on this device), else the one named
-// General, creating General if there are no projects yet.
+// Hook for the project the chat screen works in, and the list to switch between, create and delete.
+// Every chat belongs to a project. On start it opens the project used last (remembered on this device),
+// else the one named General, creating General if there are no projects yet.
 
 import { useCallback, useEffect, useState } from 'react'
 
@@ -85,5 +85,19 @@ export function useCurrentProject() {
     [refreshProjects, selectProject],
   )
 
-  return { projects, projectId, selectProject, createProject, refreshProjects, error }
+  // Deletes a project and, if it was the current one, switches to General or else the first project left.
+  // Returns the project switched to. Throws with the backend's message.
+  const deleteProject = useCallback(
+    async (id) => {
+      await window.localiAPI.projects.remove(id)
+      const list = await refreshProjects()
+      if (id !== projectId) return list.find((project) => project.id === projectId)
+      const next = findGeneral(list) ?? list[0]
+      if (next) selectProject(next.id)
+      return next
+    },
+    [projectId, refreshProjects, selectProject],
+  )
+
+  return { projects, projectId, selectProject, createProject, deleteProject, refreshProjects, error }
 }

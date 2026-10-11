@@ -255,7 +255,11 @@ ipcMain.handle('api:projects:create', (_event, { name, instructions }) => api.cr
 
 ipcMain.handle('api:projects:get', (_event, { id }) => api.getProject(id));
 
-ipcMain.handle('api:projects:update', (_event, { id, name, instructions }) => api.updateProject(id, name, instructions));
+ipcMain.handle('api:projects:update', (_event, { id, name, instructions, ignorePatterns }) =>
+  api.updateProject(id, name, instructions, ignorePatterns)
+);
+
+ipcMain.handle('api:projects:delete', (_event, { id }) => api.deleteProject(id));
 
 // Like api:folders:choose, the folder comes from the native picker opened here, never from the page.
 // The backend checks it against the exclusions and the project's other folders.

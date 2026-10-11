@@ -36,11 +36,13 @@ def catalog_project(project, report=None):
     started = time.perf_counter()
     with _lock:
         records = database.list_catalog_records(project["id"])
-        scan = scanner.scan([folder["path"] for folder in project["folders"]], report)
+        rules = scanner.IgnoreRules([folder["path"] for folder in project["folders"]], project["ignore_patterns"])
+        scan = scanner.scan(rules, report)
         updates, inserts, delete_ids, renamed = scanner.match(records, scan)
-        database.save_catalog_scan(project["id"], updates, inserts, delete_ids)
+        database.save_catalog_scan(project["id"], updates, inserts, delete_ids, scan.skipped)
     return {
         "files": len(updates) + len(inserts),
+        "skipped": scan.skipped,
         "added": len(inserts),
         "renamed": renamed,
         "removed": len(delete_ids),
@@ -49,14 +51,16 @@ def catalog_project(project, report=None):
     }
 
 
-def apply_changes(project_id, folders, paths):
-    """Updates the project's catalog for the paths the file watcher reported, and returns the counts."""
+def apply_changes(project, paths):
+    """Updates the project's catalog for the paths the file watcher reported, and returns the counts.
+    The skipped counts stay those of the last full scan."""
     with _lock:
-        scan, scope = scanner.scan_changes(paths, folders)
+        rules = scanner.IgnoreRules([folder["path"] for folder in project["folders"]], project["ignore_patterns"])
+        scan, scope = scanner.scan_changes(paths, rules)
         if not scope:
             return {"added": 0, "updated": 0, "removed": 0}
-        updates, inserts, delete_ids, _ = scanner.match(database.list_catalog_records(project_id), scan, scope)
-        database.save_catalog_scan(project_id, updates, inserts, delete_ids)
+        updates, inserts, delete_ids, _ = scanner.match(database.list_catalog_records(project["id"]), scan, scope)
+        database.save_catalog_scan(project["id"], updates, inserts, delete_ids)
     return {"added": len(inserts), "updated": len(updates), "removed": len(delete_ids)}
 
 

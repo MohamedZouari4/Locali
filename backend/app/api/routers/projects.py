@@ -34,8 +34,18 @@ class ProjectSummary(BaseModel):
     created_at: str
 
 
+class CatalogSkipped(BaseModel):
+    folders: int = Field(description="System, private, dependency and cache folders, such as node_modules.")
+    sensitive: int = Field(description="Files that may hold keys or credentials, such as .env or id_rsa; never read.")
+    binary: int = Field(description="Programs, archives and media, such as .exe, .zip or .mp4.")
+    too_large: int = Field(description="Files over MAX_FILE_SIZE_MB.")
+    project_rules: int = Field(description="Files and folders hidden by the project's own ignore patterns.")
+
+
 class Project(ProjectSummary):
     folders: list[ProjectFolder]
+    ignore_patterns: list[str] = Field(description="The project's own patterns, on top of the default ignore lists.")
+    catalog_skipped: CatalogSkipped | None = Field(description="What the last catalog scan skipped; null before the first scan.")
     file_count: int = Field(description="Files in the project's catalog, as of its last scan.")
 
 
@@ -44,9 +54,18 @@ class CreateProjectRequest(BaseModel):
     instructions: Instructions = ""
 
 
+IgnorePattern = Annotated[str, StringConstraints(max_length=200)]
+
+
 class UpdateProjectRequest(BaseModel):
     name: ProjectName | None = None
     instructions: Instructions | None = None
+    ignore_patterns: list[IgnorePattern] | None = Field(
+        None,
+        max_length=100,
+        description="Replaces the project's ignore patterns. A name pattern (*.log, drafts) matches anywhere; one with"
+        " a slash (data/raw/*.csv) matches a path from the project's folder; a trailing slash (drafts/) matches only folders.",
+    )
 
 
 class AddProjectFolderRequest(BaseModel):
@@ -101,9 +120,12 @@ def open_project(project_id: str):
 
 @router.patch("/{project_id}", response_model=Project)
 def update_project(project_id: str, req: UpdateProjectRequest):
-    """Renames the project or edits its instructions; fields left out are kept."""
+    """Renames the project or edits its instructions or ignore patterns; fields left out are kept. Changed
+    patterns queue a catalog scan."""
     try:
-        project = project_service.update_project(project_id, req.name, req.instructions)
+        project = project_service.update_project(project_id, req.name, req.instructions, req.ignore_patterns)
+    except project_service.InvalidPattern as error:
+        raise HTTPException(status_code=422, detail=str(error)) from None
     except project_service.ProjectNameTaken as error:
         raise HTTPException(status_code=409, detail=str(error)) from None
     if project is None:

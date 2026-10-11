@@ -249,12 +249,41 @@ kbd {
 .folders-dialog__message { margin: 0 0 var(--space-4); font-size: 13px; line-height: 1.5; }
 .folders-dialog__message--error { color: var(--color-danger); }
 .folders-dialog__message--info { color: var(--color-text-secondary); }
+.folders-dialog__message--success { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid color-mix(in srgb, var(--color-success) 35%, transparent); border-radius: var(--radius-md); background: var(--color-accent-soft); color: var(--color-text-primary); animation: rise var(--duration-base) var(--ease-out); }
+.folders-dialog__message--success .icon { flex: none; color: var(--color-success); }
+
+/* Toast: a short green confirmation near the top of the window. */
+.toast-region { position: fixed; z-index: 30; top: 72px; left: 50%; transform: translateX(-50%); pointer-events: none; }
+.toast { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4) var(--space-2) var(--space-2); border: 1px solid color-mix(in srgb, var(--color-success) 35%, transparent); border-radius: var(--radius-full); background: var(--color-surface-raised); box-shadow: var(--shadow-lg); color: var(--color-text-primary); font-size: 13px; font-weight: 500; white-space: nowrap; animation: toast-in var(--duration-slow) var(--ease-out); }
+.toast__icon { display: grid; place-items: center; width: 22px; height: 22px; border-radius: var(--radius-full); background: var(--color-success); color: var(--color-bg); }
 .folders-dialog__actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 .folders-dialog__button { display: inline-flex; align-items: center; gap: var(--space-2); height: 34px; padding: 0 var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: transparent; color: var(--color-text-primary); cursor: pointer; font-size: 13px; }
 .folders-dialog__button:hover:not(:disabled) { background: var(--color-hover); }
 .folders-dialog__button:disabled { opacity: 0.5; cursor: default; }
 .folders-dialog__button--primary { border-color: transparent; background: var(--color-accent); color: var(--color-accent-contrast); }
 .folders-dialog__button--primary:hover:not(:disabled) { background: var(--color-accent); filter: brightness(1.08); }
+.folders-dialog__button--danger { border-color: transparent; background: var(--color-danger); color: var(--color-bg); font-weight: 500; }
+.folders-dialog__button--danger:hover:not(:disabled) { background: var(--color-danger); filter: brightness(1.08); }
+.folders-dialog__button:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+.folders-dialog__button--small { flex: none; height: 28px; padding: 0 var(--space-3); font-size: 12px; }
+
+/* Delete project: a quiet row at the very bottom, set apart by a divider; red only on the action itself. */
+.project-dialog__danger { display: flex; align-items: center; gap: var(--space-4); margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-border); }
+.project-dialog__danger > div { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.project-dialog__danger strong { font-size: 13px; font-weight: 600; }
+.project-dialog__danger small { color: var(--color-text-secondary); font-size: 12px; line-height: 1.45; }
+.project-dialog__delete { flex: none; height: 30px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-danger); cursor: pointer; font-size: 13px; font-weight: 500; }
+.project-dialog__delete:hover:not(:disabled) { background: color-mix(in srgb, var(--color-danger) 10%, transparent); }
+.project-dialog__delete:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+.project-dialog__delete:disabled { opacity: 0.45; cursor: default; }
+
+/* Confirmation dialog: a small, centred question with a tinted icon, replacing window.confirm. */
+.confirm-dialog { width: min(100% - 2 * var(--space-6), 420px); }
+.confirm-dialog__body { display: flex; gap: var(--space-4); margin-bottom: var(--space-5); }
+.confirm-dialog__icon { display: grid; flex: none; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-full); background: color-mix(in srgb, var(--color-danger) 12%, transparent); color: var(--color-danger); }
+.confirm-dialog h2 { margin: var(--space-1) 0 var(--space-2); font: 600 16px/1.3 var(--font-display); }
+.confirm-dialog p { margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.confirm-dialog p strong { color: var(--color-text-primary); font-weight: 600; }
 
 /* Project dialog: built on the Indexed folders dialog, plus a form and a permission picker per folder. */
 .project-dialog { max-height: calc(100vh - 2 * var(--space-6)); overflow-y: auto; }
@@ -266,6 +295,27 @@ kbd {
 .project-dialog__field input:focus-visible,
 .project-dialog__field textarea:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 1px; }
 .project-dialog__section { margin: var(--space-4) 0 var(--space-2); font: 600 14px/1.3 var(--font-display); }
+/* Folders and Files slide in when the dialog turns from New project into the project's settings. */
+.project-dialog__group { padding-top: var(--space-1); border-top: 1px solid var(--color-border); animation: rise var(--duration-base) var(--ease-out); }
+.project-dialog__group .folders-dialog__list { margin-bottom: var(--space-2); }
+.project-dialog__section-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.project-dialog__section-header .project-dialog__section { margin-bottom: var(--space-3); }
+
+/* No folders yet: a dashed card that makes adding the first folder the obvious next step. */
+.project-dialog__empty-folders { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); padding: var(--space-4); border: 1px dashed var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-surface); }
+.project-dialog__empty-folders > div { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.project-dialog__empty-folders strong { font-size: 13px; font-weight: 600; }
+.project-dialog__empty-folders small { color: var(--color-text-secondary); font-size: 12px; line-height: 1.45; }
+.project-dialog__empty-folders .folders-dialog__button { flex: none; }
+.project-dialog__empty-icon { display: grid; flex: none; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-full); background: var(--color-accent-soft); color: var(--color-accent); }
+
+/* Files: the catalog count with Scan files beside it. */
+.project-dialog__files { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-2); padding-bottom: var(--space-1); }
+.project-dialog__files .project-dialog__section { margin-bottom: 2px; }
+.project-dialog__files small { display: block; color: var(--color-text-secondary); font-size: 12px; }
+.project-dialog__files .project-dialog__skipped { margin-top: 2px; line-height: 1.45; }
+.project-dialog__field small { color: var(--color-text-secondary); font-size: 12px; line-height: 1.45; }
+.project-dialog__field .project-dialog__patterns { font-family: var(--font-mono, ui-monospace, monospace); font-size: 13px; }
 .project-dialog__permission { flex: none; height: 26px; padding: 0 var(--space-1); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text-primary); font-size: 12px; cursor: pointer; }
 
 .sidebar__footer {
@@ -550,10 +600,13 @@ kbd {
 @keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(0.97); } }
 @keyframes menu-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
 @keyframes fade-in { from { opacity: 0; } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-8px) scale(0.96); } }
 @media (prefers-reduced-motion: reduce) {
   .folders-dialog[open],
   .folders-dialog[open]::backdrop,
-  .project-menu { animation-duration: 1ms; }
+  .project-menu,
+  .toast,
+  .folders-dialog__message--success { animation-duration: 1ms; }
 }
 @keyframes pulse { 50% { opacity: 0.35; transform: scale(0.8); } }
 @keyframes bounce { 0%, 80%, 100% { opacity: 0.35; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-4px); } }

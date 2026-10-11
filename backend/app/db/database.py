@@ -311,16 +311,23 @@ def create_project(name, instructions="", folders=()):
 
 
 def get_project(project_id):
-    """Returns the project with its folders in path order and how many files its catalog holds, or None
-    if it doesn't exist."""
+    """Returns the project with its folders in path order, its ignore patterns, how many files its catalog
+    holds and what the last scan skipped (None before the first scan), or None if it doesn't exist."""
     conn = get_connection()
-    row = conn.execute("SELECT id, name, instructions, created_at FROM projects WHERE id = ?", (project_id,)).fetchone()
+    row = conn.execute(
+        "SELECT id, name, instructions, created_at, ignore_patterns, catalog_skipped FROM projects WHERE id = ?", (project_id,)
+    ).fetchone()
     folders = conn.execute(
         "SELECT id, path, permission, added_at FROM project_folders WHERE project_id = ? ORDER BY path", (project_id,)
     ).fetchall()
     file_count = conn.execute("SELECT COUNT(*) FROM catalog_files WHERE project_id = ?", (project_id,)).fetchone()[0]
     conn.close()
-    return {**dict(row), "folders": [dict(f) for f in folders], "file_count": file_count} if row else None
+    if row is None:
+        return None
+    project = dict(row)
+    project["ignore_patterns"] = json.loads(project["ignore_patterns"])
+    project["catalog_skipped"] = json.loads(project["catalog_skipped"]) if project["catalog_skipped"] else None
+    return {**project, "folders": [dict(f) for f in folders], "file_count": file_count}
 
 
 def list_projects():
@@ -331,13 +338,16 @@ def list_projects():
     return [dict(row) for row in rows]
 
 
-def update_project(project_id, name=None, instructions=None):
-    """Changes the name or instructions given and keeps the rest. Returns False if the project doesn't exist."""
+def update_project(project_id, name=None, instructions=None, ignore_patterns=None):
+    """Changes the name, instructions or ignore patterns given and keeps the rest. Returns False if the
+    project doesn't exist."""
+    patterns = json.dumps(ignore_patterns) if ignore_patterns is not None else None
     with _transaction() as conn:
         return (
             conn.execute(
-                "UPDATE projects SET name = COALESCE(?, name), instructions = COALESCE(?, instructions) WHERE id = ?",
-                (name, instructions, project_id),
+                "UPDATE projects SET name = COALESCE(?, name), instructions = COALESCE(?, instructions),"
+                " ignore_patterns = COALESCE(?, ignore_patterns) WHERE id = ?",
+                (name, instructions, patterns, project_id),
             ).rowcount
             > 0
         )
@@ -394,9 +404,12 @@ def list_catalog_records(project_id):
     return [dict(row) for row in rows]
 
 
-def save_catalog_scan(project_id, updates, inserts, delete_ids):
-    """Saves one scan in one transaction. Deletes run first, so a key they free can be reused."""
+def save_catalog_scan(project_id, updates, inserts, delete_ids, skipped=None):
+    """Saves one scan in one transaction. Deletes run first, so a key they free can be reused. `skipped`,
+    from a full scan, replaces the project's skipped counts."""
     with _transaction() as conn:
+        if skipped is not None:
+            conn.execute("UPDATE projects SET catalog_skipped = ? WHERE id = ?", (json.dumps(skipped), project_id))
         conn.executemany("DELETE FROM catalog_files WHERE id = ? AND project_id = ?", [(i, project_id) for i in delete_ids])
         conn.executemany(
             "UPDATE catalog_files SET file_key = :file_key, path = :path, name = :name, extension = :extension, size = :size,"

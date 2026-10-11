@@ -1171,7 +1171,7 @@
           "Projects"
         ],
         "summary": "Update Project",
-        "description": "Renames the project or edits its instructions; fields left out are kept.",
+        "description": "Renames the project or edits its instructions or ignore patterns; fields left out are kept. Changed\npatterns queue a catalog scan.",
         "operationId": "update_project_projects__project_id__patch",
         "parameters": [
           {
@@ -1706,6 +1706,44 @@
         ],
         "title": "CatalogFile"
       },
+      "CatalogSkipped": {
+        "properties": {
+          "folders": {
+            "type": "integer",
+            "title": "Folders",
+            "description": "System, private, dependency and cache folders, such as node_modules."
+          },
+          "sensitive": {
+            "type": "integer",
+            "title": "Sensitive",
+            "description": "Files that may hold keys or credentials, such as .env or id_rsa; never read."
+          },
+          "binary": {
+            "type": "integer",
+            "title": "Binary",
+            "description": "Programs, archives and media, such as .exe, .zip or .mp4."
+          },
+          "too_large": {
+            "type": "integer",
+            "title": "Too Large",
+            "description": "Files over MAX_FILE_SIZE_MB."
+          },
+          "project_rules": {
+            "type": "integer",
+            "title": "Project Rules",
+            "description": "Files and folders hidden by the project's own ignore patterns."
+          }
+        },
+        "type": "object",
+        "required": [
+          "folders",
+          "sensitive",
+          "binary",
+          "too_large",
+          "project_rules"
+        ],
+        "title": "CatalogSkipped"
+      },
       "ChatRequest": {
         "properties": {
           "message": {
@@ -2228,6 +2266,25 @@
             "type": "array",
             "title": "Folders"
           },
+          "ignore_patterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ignore Patterns",
+            "description": "The project's own patterns, on top of the default ignore lists."
+          },
+          "catalog_skipped": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogSkipped"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the last catalog scan skipped; null before the first scan."
+          },
           "file_count": {
             "type": "integer",
             "title": "File Count",
@@ -2241,6 +2298,8 @@
           "instructions",
           "created_at",
           "folders",
+          "ignore_patterns",
+          "catalog_skipped",
           "file_count"
         ],
         "title": "Project"
@@ -2425,6 +2484,23 @@
               }
             ],
             "title": "Instructions"
+          },
+          "ignore_patterns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ignore Patterns",
+            "description": "Replaces the project's ignore patterns. A name pattern (*.log, drafts) matches anywhere; one with a slash (data/raw/*.csv) matches a path from the project's folder; a trailing slash (drafts/) matches only folders."
           }
         },
         "type": "object",

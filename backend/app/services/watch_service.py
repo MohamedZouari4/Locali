@@ -7,8 +7,9 @@ handled together:
 - index entries of deleted files are removed at once, so those files drop out of answers without
   waiting for Ollama;
 - new and changed files in the indexed folders are queued as a `reindex` job, which replaces their chunks.
-Changes in system, private or ignored folders, and to sensitive files, are dropped first. The folder list
-is read again every WATCH_FOLDERS_CHECK_SECONDS, so added and removed folders are picked up.
+Changes in system, private or ignored folders, and to sensitive files, are dropped first; each project's
+own ignore patterns are applied by the catalog. The folder list is read again every
+WATCH_FOLDERS_CHECK_SECONDS, so added and removed folders are picked up.
 """
 
 import logging
@@ -18,7 +19,7 @@ import threading
 from watchfiles import watch
 
 from app.ai.ingestion import store
-from app.ai.ingestion.walker import exclusion_reason, is_under, scan_roots, walk_data_dir
+from app.ai.ingestion.walker import exclusion_reason, is_sensitive, is_under, scan_roots, walk_data_dir
 from app.ai.retrieval.sparse_retriever import all_sources, invalidate_caches
 from app.core import config
 from app.db import database
@@ -45,7 +46,7 @@ def watched_folders():
 
 def keep_change(_change, path):
     """watchfiles filter: drops changes the catalog and the index must never see."""
-    return os.path.basename(path) not in config.SENSITIVE_FILES and exclusion_reason(path) is None
+    return not is_sensitive(os.path.basename(path)) and exclusion_reason(path) is None
 
 
 def _update_index(paths):
@@ -76,7 +77,7 @@ def handle_changes(paths):
     paths = sorted(set(paths))
     for project_id, folders in database.list_all_project_folders().items():
         if any(is_under(path, folder) for path in paths for folder in folders):
-            catalog_service.apply_changes(project_id, folders, paths)
+            catalog_service.apply_changes(database.get_project(project_id), paths)
     _update_index(paths)
 
 

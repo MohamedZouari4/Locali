@@ -3,8 +3,10 @@ ignored and sensitive paths, and checks whether an indexed path is still in scop
 
 The scan roots are the folders chosen in the app (the indexed_folders table) plus SCAN_DRIVES from
 config. Settings are read from `config` at call time, so changing them (for example in tests) takes effect.
+SENSITIVE_FILES may use * and ? wildcards; is_sensitive is the one place that checks a name against it.
 """
 
+import fnmatch
 import os
 
 from app.core import config
@@ -25,6 +27,13 @@ def is_under(path, folder):
     """True if path is folder itself or anything inside it (case-insensitively on Windows)."""
     path_key, folder_key = _key(path), _key(folder)
     return path_key == folder_key or path_key.startswith(folder_key + "/")
+
+
+def is_sensitive(name):
+    """True for a file name that may hold keys or credentials (SENSITIVE_FILES); such files are never read.
+    Compared ignoring case, so ID_RSA and Secrets.YAML count too."""
+    name = name.lower()
+    return any(fnmatch.fnmatchcase(name, pattern.lower()) for pattern in config.SENSITIVE_FILES)
 
 
 def scan_roots():
@@ -70,7 +79,7 @@ def walk_data_dir(scan_drives):
 
             dirnames[:] = [d for d in dirnames if d not in config.IGNORE_DIRS]
             for name in filenames:
-                if name in config.SENSITIVE_FILES:
+                if is_sensitive(name):
                     continue
                 yield os.path.join(dirpath, name)
 
@@ -84,4 +93,7 @@ def is_excluded_path(path, roots):
         return True
     if exclusion_reason(path):
         return True
+    if is_sensitive(os.path.basename(path)):
+        return True
+
     return _norm(path).rsplit(".", 1)[-1].lower() in config.SKIP_EXTENSIONS

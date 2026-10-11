@@ -38,6 +38,7 @@ class LimitSettings:
     job_progress_interval_seconds: float = 1.0  # a job's progress is saved at most this often
     job_cancel_check_seconds: float = 0.5  # a running job reads its cancel flag at most this often
     watch_debounce_ms: int = 800  # the file watcher handles changes in batches collected over this long
+    max_file_size_mb: int = 50  # larger files are never indexed or catalogued
     watch_folders_check_seconds: float = 5.0  # how often the file watcher looks for added or removed folders
 
 
@@ -91,6 +92,20 @@ class PrivacySettings:
             "$RECYCLE.BIN",
             "System Volume Information",
             "site-packages",
+            "bower_components",
+            ".pytest_cache",
+            ".ruff_cache",
+            ".mypy_cache",
+            ".tox",
+            ".nox",
+            ".next",
+            ".nuxt",
+            ".svelte-kit",
+            ".parcel-cache",
+            ".turbo",
+            ".yarn",
+            ".pnpm-store",
+            ".terraform",
             ".bun",
             ".npm",
             ".cache",
@@ -124,7 +139,36 @@ class PrivacySettings:
             "OneDrive - North American Private University",
         }
     )
-    sensitive_files: set[str] = field(default_factory=lambda: {".claude.json"})
+    # File names that may hold keys or credentials; never read. * and ? match like in a file dialog.
+    sensitive_files: set[str] = field(
+        default_factory=lambda: {
+            ".claude.json",
+            ".env",
+            ".env.*",
+            ".netrc",
+            ".pgpass",
+            ".npmrc",
+            ".pypirc",
+            ".git-credentials",
+            "credentials",
+            "credentials.json",
+            "secrets.json",
+            "secrets.yaml",
+            "secrets.yml",
+            "id_rsa",
+            "id_dsa",
+            "id_ecdsa",
+            "id_ed25519",
+            "*.pem",
+            "*.key",
+            "*.p12",
+            "*.pfx",
+            "*.jks",
+            "*.keystore",
+            "*.kdbx",
+            "*.ovpn",
+        }
+    )
     code_extensions: set[str] = field(
         default_factory=lambda: {
             "py",
@@ -207,6 +251,7 @@ RERANK_BATCH_SIZE = LIMITS.rerank_batch_size
 RERANK_TIMEOUT_MS = LIMITS.rerank_timeout_ms
 MIN_FREE_DISK_MB = LIMITS.min_free_disk_mb
 JOB_POLL_SECONDS = LIMITS.job_poll_seconds
+MAX_FILE_SIZE_MB = LIMITS.max_file_size_mb
 WATCH_DEBOUNCE_MS = LIMITS.watch_debounce_ms
 WATCH_FOLDERS_CHECK_SECONDS = LIMITS.watch_folders_check_seconds
 JOB_PROGRESS_INTERVAL_SECONDS = LIMITS.job_progress_interval_seconds

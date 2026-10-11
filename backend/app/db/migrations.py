@@ -156,7 +156,14 @@ def _004_catalog(conn):
     conn.execute("CREATE INDEX idx_catalog_files_path ON catalog_files(project_id, path)")
 
 
-MIGRATIONS = [_001_initial, _002_projects, _003_general_project, _004_catalog]
+def _005_project_ignore_rules(conn):
+    # ignore_patterns: the project's own patterns on top of the default ignore lists, as a JSON list.
+    # catalog_skipped: what the last catalog scan skipped, by reason, as a JSON object; NULL until one runs.
+    conn.execute("ALTER TABLE projects ADD COLUMN ignore_patterns TEXT NOT NULL DEFAULT '[]'")
+    conn.execute("ALTER TABLE projects ADD COLUMN catalog_skipped TEXT")
+
+
+MIGRATIONS = [_001_initial, _002_projects, _003_general_project, _004_catalog, _005_project_ignore_rules]
 
 
 def schema_version(conn):

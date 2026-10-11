@@ -16,6 +16,7 @@ A local-first RAG (retrieval-augmented generation) assistant that indexes files 
 - Projects: each has its own instructions and folders (with a Read or Act permission), and every chat belongs to one project. Folder paths are checked against the project boundary, with links, junctions and shortcuts resolved first.
 - Folders to index are chosen in the app. Indexing and forgetting a folder run as background jobs, with live progress and cancellation.
 - A file catalog per project: the name, type, size and dates of every file in the project's folders, scanned as a background job. Each file keeps a stable id when it is renamed or moved.
+- Ignore rules: dependency and cache folders, files with keys or credentials, programs and media, and files over `MAX_FILE_SIZE_MB` are skipped everywhere, and sensitive files are never opened. Each project can add its own patterns (`*.log`, `drafts/`, `data/raw/*.csv`); Project settings shows what the last scan skipped.
 - A file watcher keeps each project's catalog and the search index current while Locali runs: new, changed, moved and deleted files are picked up within seconds, and deleted files drop out of answers at once.
 - Health checks for the model runtime, the required models, free disk space and OCR, each with a fix when something is wrong.
 - Sandboxed file tools (list, move, create folder, organize by extension, find empty files) restricted to one workspace folder. Tools are withheld whenever file contents are in the prompt.
@@ -145,6 +146,7 @@ All settings live in [backend/app/core/config.py](backend/app/core/config.py), g
 | `JOB_PROGRESS_INTERVAL_SECONDS` | `1.0` | A running job's progress is saved at most this often. |
 | `JOB_EVENTS_POLL_SECONDS` | `0.5` | How often `/jobs/events` looks for changed jobs. |
 | `JOB_CANCEL_CHECK_SECONDS` | `0.5` | A running job reads its cancel flag at most this often, so checking per file stays cheap. |
+| `MAX_FILE_SIZE_MB` | `50` | Larger files are never indexed or catalogued. |
 | `WATCH_DEBOUNCE_MS` | `800` | The file watcher handles changes in batches collected over this long. |
 | `WATCH_FOLDERS_CHECK_SECONDS` | `5.0` | How often the file watcher looks for added or removed folders. |
 
@@ -168,8 +170,8 @@ All relative to the repository root.
 | `SCAN_DRIVES` | `[]` | Extra folders that ingestion walks, besides those chosen in the app (sidebar → Indexed folders). Mostly for development. |
 | `SYSTEM_EXCLUDE` | 6 Windows system folders, such as `C:/Windows` | Folders skipped, with everything under them. |
 | `PRIVACY_EXCLUDE` | 5 browser-profile and credential paths | Any folder whose path contains one of these is skipped. |
-| `IGNORE_DIRS` | 46 names, such as `.git`, `node_modules` and `.ssh` | Folder names skipped wherever they appear. |
-| `SENSITIVE_FILES` | `.claude.json` | File names that are never ingested. |
+| `IGNORE_DIRS` | 60 names, such as `.git`, `node_modules` and `.ssh` | Folder names skipped wherever they appear. |
+| `SENSITIVE_FILES` | 25 names and patterns, such as `.env*`, `id_rsa` and `*.pem` | Files that may hold keys or credentials. They are never opened, indexed or catalogued; `*` and `?` work as wildcards. |
 | `CODE_EXTENSIONS` | 20 extensions, such as `py`, `js`, `md` and `txt` | Extensions read as code or plain text. |
 | `SKIP_EXTENSIONS` | 33 extensions, such as `exe`, `zip` and `mp4` | Binary, archive and media extensions that are never ingested. |
 
@@ -223,8 +225,8 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | `DELETE` | `/conversations/{id}` | Deletes a chat and its messages; `204`, or `404` if unknown. |
 | `GET` | `/projects` | Projects in name order: `id`, `name`, `instructions`, `created_at`. |
 | `POST` | `/projects` | Creates a project; body `{ "name": "...", "instructions": "..." }`; `201`, or `409` if another project has the name (ignoring case). |
-| `GET` | `/projects/{id}` | One project with its `folders` (`path`, `permission`: `read` or `act`) and `file_count` (files in its catalog); `404` if unknown. |
-| `PATCH` | `/projects/{id}` | Renames a project or edits its instructions; fields left out are kept; `409` if the name is taken. |
+| `GET` | `/projects/{id}` | One project with its `folders` (`path`, `permission`: `read` or `act`) `ignore_patterns`, `file_count` (files in its catalog) and `catalog_skipped` (what the last scan skipped: `folders`, `sensitive`, `binary`, `too_large`, `project_rules`; `null` before the first scan); `404` if unknown. |
+| `PATCH` | `/projects/{id}` | Renames a project or edits its instructions or `ignore_patterns` (up to 100; changed patterns queue a catalog scan); fields left out are kept; `409` if the name is taken, `422` for a pattern with a full path or `..`. |
 | `DELETE` | `/projects/{id}` | Deletes a project, its folder list and its chats, never the files in its folders; `204`, or `404` if unknown. |
 | `POST` | `/projects/{id}/folders` | Adds a folder; body `{ "path": "...", "permission": "read" }`; `201`, or `422` with the reason (missing, system/private/ignored folder, already in the project). |
 | `PATCH` | `/projects/{id}/folders/{folder_id}` | Switches a folder between `read` and `act`; body `{ "permission": "act" }`. |
@@ -288,7 +290,8 @@ A database migrated by a newer Locali is refused at startup rather than changed.
 ## Known limitations
 
 - Attachments, settings, workspace statistics and the context panel are hidden until the backend supports them.
-- Projects can't be deleted from the desktop yet (use `DELETE /projects/{id}`), and a project's folders and instructions don't affect answers yet.
+- A project's folders and instructions don't affect answers yet. The last project can't be deleted from the desktop.
+- A project's own ignore patterns apply to its catalog; search still uses the Indexed folders, which follow only the default rules.
 - Retrieval is not yet limited to a project's folders: the chat's optional `project` field only filters sources by path text.
 - Changes made while Locali is closed are picked up by the next Scan files or Index now, not at startup. On FAT and exFAT drives, such as most USB sticks, Windows file IDs change when a file moves, so a moved file there may get a new catalog id.
 - Source chips can only reveal files inside the workspace folder; indexed files elsewhere are refused.

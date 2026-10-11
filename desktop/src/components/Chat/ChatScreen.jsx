@@ -13,6 +13,7 @@ import { useJobs } from '../../hooks/useJobs'
 import { useProject } from '../../hooks/useProject'
 import { useTheme } from '../../hooks/useTheme'
 import { BrandMark, Icon } from '../Icon'
+import { ConfirmDialog } from './ConfirmDialog'
 import { ConversationList } from './ConversationList'
 import { FoldersDialog } from './FoldersDialog'
 import { HealthBanner } from './HealthBanner'
@@ -20,6 +21,7 @@ import { JobsPanel } from './JobsPanel'
 import { MessageBubble } from './MessageBubble'
 import { ProjectDialog } from './ProjectDialog'
 import { ProjectSwitcher } from './ProjectSwitcher'
+import { Toast } from './Toast'
 import './ChatScreen.css'
 
 const suggestions = [
@@ -33,12 +35,17 @@ const suggestions = [
 const narrowScreen = '(max-width: 720px)'
 
 export function ChatScreen() {
-  const { projects, projectId, selectProject, createProject, refreshProjects, error: projectError } = useCurrentProject()
+  const { projects, projectId, selectProject, createProject, deleteProject, refreshProjects, error: projectError } = useCurrentProject()
   const { messages, conversationId, sendMessage, retry, stop, loadConversation, newChat } = useChatStream(projectId)
   const { conversations, error: conversationsError, refresh, rename, remove } = useConversations(projectId)
   const { jobs, cancel: cancelJob } = useJobs()
   const projectSettings = useProject(projectId, jobs)
   const [projectDialog, setProjectDialog] = useState(null) // null, 'create' or 'edit'
+  const [projectDialogKey, setProjectDialogKey] = useState(0) // new each time it opens, so its form starts fresh
+  const [pendingDelete, setPendingDelete] = useState(null) // the conversation waiting for confirmation
+  const [confirmingProjectDelete, setConfirmingProjectDelete] = useState(false)
+  const [toast, setToast] = useState(null) // { id, text }
+  const toastTimer = useRef(null)
   const { folders, message: folderMessage, addFolder, removeFolder, indexNow, clearMessage } = useFolders()
   const [foldersOpen, setFoldersOpen] = useState(false)
   const { theme, toggleTheme } = useTheme()
@@ -50,6 +57,15 @@ export function ChatScreen() {
   const stickToBottom = useRef(true)
   const textareaRef = useRef(null)
   const isBusy = messages[messages.length - 1]?.isStreaming ?? false
+
+  // Confirms a finished change ("Chat renamed") for a few seconds; a newer one replaces it.
+  const showToast = (text) => {
+    clearTimeout(toastTimer.current)
+    setToast({ id: Date.now(), text })
+    toastTimer.current = setTimeout(() => setToast(null), 3000)
+  }
+
+  useEffect(() => () => clearTimeout(toastTimer.current), [])
 
   // The backend saves every turn, so reload the list on start and whenever an answer ends.
   useEffect(() => {
@@ -95,17 +111,52 @@ export function ChatScreen() {
     selectProject(id)
   }
 
-  // Throws with the backend's message (for example a taken name), which the dialog shows.
-  const createAndOpenProject = async (name, instructions) => {
-    if (isBusy) stop()
-    await createProject(name, instructions)
-    newChat()
-    setDraft('')
-    setProjectDialog('edit')
+  const openProjectDialog = (mode) => {
+    projectSettings.clearMessage()
+    setProjectDialogKey((key) => key + 1)
+    setProjectDialog(mode)
   }
 
-  const saveProject = async (name, instructions) => {
-    if (await projectSettings.save(name, instructions)) await refreshProjects()
+  // Creates the project, switches to it with a new chat and closes the dialog; Project settings opens only
+  // from its own button. Returns the project; throws with the backend's message (for example a taken name),
+  // which the dialog shows.
+  const createAndSwitchProject = async (name, instructions) => {
+    if (isBusy) stop()
+    const project = await createProject(name, instructions)
+    newChat()
+    setDraft('')
+    setProjectDialog(null)
+    showToast(`Project “${project.name}” created`)
+    return project
+  }
+
+  // New project's Add folder… passes the new project's id, after the dialog has closed, so confirm with a
+  // notice; in Project settings (no id) the dialog shows the outcome itself.
+  const addProjectFolder = async (id) => {
+    if ((await projectSettings.addFolder(id)) && id !== undefined) showToast('Folder added. Its files are being scanned.')
+  }
+
+  const saveProject = async (name, instructions, ignorePatterns) => {
+    if (await projectSettings.save(name, instructions, ignorePatterns)) await refreshProjects()
+  }
+
+  // Deletes the current project after confirmation, switches to another one and starts a new chat there.
+  const confirmProjectDelete = async () => {
+    const project = projectSettings.project
+    setConfirmingProjectDelete(false)
+    if (!project) return
+    if (isBusy) stop()
+    try {
+      await deleteProject(project.id)
+    } catch (error) {
+      projectSettings.notify({ kind: 'error', text: String(error?.message ?? error).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') })
+      return
+    }
+    setProjectDialog(null)
+    projectSettings.clearMessage()
+    newChat()
+    setDraft('')
+    showToast(`Project “${project.name}” deleted`)
   }
 
   const closeProjectDialog = () => {
@@ -113,9 +164,19 @@ export function ChatScreen() {
     projectSettings.clearMessage()
   }
 
-  const deleteConversation = async (conversation) => {
-    if (!window.confirm(`Delete "${conversation.title || 'Untitled chat'}"? This can't be undone.`)) return
-    if ((await remove(conversation.id)) && conversation.id === conversationId) startNewChat()
+  // The trash button only asks; the chat is deleted once the confirmation dialog says yes.
+  const deleteConversation = (conversation) => setPendingDelete(conversation)
+
+  const confirmDelete = async () => {
+    const conversation = pendingDelete
+    setPendingDelete(null)
+    if (!conversation || !(await remove(conversation.id))) return
+    showToast('Chat deleted')
+    if (conversation.id === conversationId) startNewChat()
+  }
+
+  const renameChat = async (id, title) => {
+    if (await rename(id, title)) showToast('Chat renamed')
   }
 
   const activeTitle = conversationId ? conversations.find((conversation) => conversation.id === conversationId)?.title || 'Untitled chat' : 'New conversation'
@@ -162,8 +223,8 @@ export function ChatScreen() {
             projects={projects}
             projectId={projectId}
             onSelect={switchProject}
-            onCreate={() => setProjectDialog('create')}
-            onSettings={() => setProjectDialog('edit')}
+            onCreate={() => openProjectDialog('create')}
+            onSettings={() => openProjectDialog('edit')}
           />
 
           <button className="new-chat" type="button" onClick={startNewChat}>
@@ -171,7 +232,7 @@ export function ChatScreen() {
           </button>
 
           <nav className="sidebar__list">
-            <ConversationList conversations={conversations} activeId={conversationId} error={projectError ?? conversationsError} onOpen={openConversation} onRename={rename} onDelete={deleteConversation} />
+            <ConversationList conversations={conversations} activeId={conversationId} error={projectError ?? conversationsError} onOpen={openConversation} onRename={renameChat} onDelete={deleteConversation} />
           </nav>
 
           <JobsPanel jobs={jobs} onCancel={cancelJob} />
@@ -262,18 +323,46 @@ export function ChatScreen() {
       </main>
 
       <ProjectDialog
-        key={`${projectDialog}-${projectSettings.project?.id}`}
+        key={projectDialogKey}
         open={projectDialog !== null}
         mode={projectDialog}
         project={projectSettings.project}
         message={projectSettings.message}
         onClose={closeProjectDialog}
-        onCreate={createAndOpenProject}
+        onCreate={createAndSwitchProject}
         onSave={saveProject}
-        onAddFolder={projectSettings.addFolder}
+        onAddFolder={addProjectFolder}
         onSetPermission={projectSettings.setPermission}
         onRemoveFolder={projectSettings.removeFolder}
         onScanFiles={projectSettings.scanFiles}
+        canDelete={projects.length > 1}
+        onDelete={() => setConfirmingProjectDelete(true)}
+      />
+      <Toast toast={toast} />
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete this chat?"
+        message={
+          <>
+            <strong>{pendingDelete?.title || 'Untitled chat'}</strong> and all its messages will be deleted from this device. This can’t be undone.
+          </>
+        }
+        confirmLabel="Delete chat"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
+      <ConfirmDialog
+        open={confirmingProjectDelete}
+        title="Delete this project?"
+        message={
+          <>
+            <strong>{projectSettings.project?.name}</strong> will be deleted with its {conversations.length === 1 ? '1 chat' : `${conversations.length} chats`}, its folder
+            list and its file catalog. The files in its folders stay where they are. This can’t be undone.
+          </>
+        }
+        confirmLabel="Delete project"
+        onConfirm={confirmProjectDelete}
+        onCancel={() => setConfirmingProjectDelete(false)}
       />
       <FoldersDialog open={foldersOpen} onClose={closeFolders} folders={folders} message={folderMessage} onAdd={addFolder} onRemove={removeFolder} onIndexNow={indexNow} />
     </div>
