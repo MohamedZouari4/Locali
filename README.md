@@ -16,12 +16,13 @@ A local-first RAG (retrieval-augmented generation) assistant that indexes files 
 - Projects: each has its own instructions and folders (with a Read or Act permission), and every chat belongs to one project. Folder paths are checked against the project boundary, with links, junctions and shortcuts resolved first.
 - Folders to index are chosen in the app. Indexing and forgetting a folder run as background jobs, with live progress and cancellation.
 - A file catalog per project: the name, type, size and dates of every file in the project's folders, scanned as a background job. Each file keeps a stable id when it is renamed or moved.
+- A file watcher keeps each project's catalog and the search index current while Locali runs: new, changed, moved and deleted files are picked up within seconds, and deleted files drop out of answers at once.
 - Health checks for the model runtime, the required models, free disk space and OCR, each with a fix when something is wrong.
 - Sandboxed file tools (list, move, create folder, organize by extension, find empty files) restricted to one workspace folder. Tools are withheld whenever file contents are in the prompt.
 - Hash-chained, tamper-evident action log in `logs/actions.log`, mirrored into SQLite.
 - FastAPI routes for chat, conversations, projects, jobs, indexed folders, search, ingestion and file operations, behind a bearer token.
 - SQLite persistence for projects, conversations, jobs and audit records, with versioned schema migrations. Every chat turn is saved, and a reply cut off by an error, Stop or a crash is kept and marked incomplete.
-- Electron/React desktop UI with a context-isolated IPC bridge: streaming chat, conversation history, indexed folders, background tasks and a health banner.
+- Electron/React desktop UI with a context-isolated IPC bridge: a project switcher and project settings (folders with Read or Act, file scan), streaming chat, conversation history, indexed folders, background tasks and a health banner.
 
 The desktop package is not yet self-contained: it does not bundle the Python runtime, backend, Tesseract, or Ollama models. See [Known limitations](#known-limitations).
 
@@ -57,7 +58,7 @@ backend/                         Python backend (run Python commands from here)
          ingestion/              walker, extractors, redaction, chunking, embeddings, store, pipeline
          retrieval/              dense, sparse (BM25), hybrid (RRF), reranker, retriever
          chat/                   orchestrator, prompts, tool_schema
-      services/                  rules between routers and the rest: chat, projects, project_boundary, folders, health, rag, tools
+      services/                  rules between routers and the rest: chat, projects, project_boundary, folders, health, rag, tools, watch
       jobs/                      worker.py (background job queue), demo.py (test job kind)
       catalog/                   scanner.py (walks a project's folders, stable file identity)
       db/                        database.py (SQLite), migrations.py (schema versions)
@@ -144,6 +145,8 @@ All settings live in [backend/app/core/config.py](backend/app/core/config.py), g
 | `JOB_PROGRESS_INTERVAL_SECONDS` | `1.0` | A running job's progress is saved at most this often. |
 | `JOB_EVENTS_POLL_SECONDS` | `0.5` | How often `/jobs/events` looks for changed jobs. |
 | `JOB_CANCEL_CHECK_SECONDS` | `0.5` | A running job reads its cancel flag at most this often, so checking per file stays cheap. |
+| `WATCH_DEBOUNCE_MS` | `800` | The file watcher handles changes in batches collected over this long. |
+| `WATCH_FOLDERS_CHECK_SECONDS` | `5.0` | How often the file watcher looks for added or removed folders. |
 
 ### Paths (`PathSettings`)
 
@@ -220,7 +223,7 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | `DELETE` | `/conversations/{id}` | Deletes a chat and its messages; `204`, or `404` if unknown. |
 | `GET` | `/projects` | Projects in name order: `id`, `name`, `instructions`, `created_at`. |
 | `POST` | `/projects` | Creates a project; body `{ "name": "...", "instructions": "..." }`; `201`, or `409` if another project has the name (ignoring case). |
-| `GET` | `/projects/{id}` | One project with its `folders` (`path`, `permission`: `read` or `act`); `404` if unknown. |
+| `GET` | `/projects/{id}` | One project with its `folders` (`path`, `permission`: `read` or `act`) and `file_count` (files in its catalog); `404` if unknown. |
 | `PATCH` | `/projects/{id}` | Renames a project or edits its instructions; fields left out are kept; `409` if the name is taken. |
 | `DELETE` | `/projects/{id}` | Deletes a project, its folder list and its chats, never the files in its folders; `204`, or `404` if unknown. |
 | `POST` | `/projects/{id}/folders` | Adds a folder; body `{ "path": "...", "permission": "read" }`; `201`, or `422` with the reason (missing, system/private/ignored folder, already in the project). |
@@ -228,7 +231,7 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | `DELETE` | `/projects/{id}/folders/{folder_id}` | Takes a folder off the project; its files are not touched. `204`, or `404` if unknown. |
 | `POST` | `/projects/{id}/catalog` | Queues a `catalog` job that lists every file in the project's folders; `202` with the job, or `404`. Follow it on `/jobs/events`. |
 | `GET` | `/projects/{id}/catalog?limit=1000&offset=0` | The catalogued files in path order: `id` (kept across renames and moves), `path`, `name`, `extension`, `size`, `file_created_at`, `file_modified_at`, `catalogued_at`. |
-| `POST` | `/jobs` | Starts a background job; body `{ "kind": "...", "params": {...}, "project": "default" }`; `202`, `422` for an unknown kind, or `409` if that kind allows only one active job. Kinds: `ingest`, `forget_folder`, `catalog`, and `demo` with `LOCALI_DEMO_JOBS=1`. |
+| `POST` | `/jobs` | Starts a background job; body `{ "kind": "...", "params": {...}, "project": "default" }`; `202`, `422` for an unknown kind, or `409` if that kind allows only one active job. Kinds: `ingest`, `forget_folder`, `catalog`, `reindex`, and `demo` with `LOCALI_DEMO_JOBS=1`. |
 | `GET` | `/jobs?state=...&limit=50` | Jobs newest first, optionally only some states. |
 | `GET` | `/jobs/{id}` | One job with its state, progress and result or error; `404` if unknown. |
 | `POST` | `/jobs/{id}/cancel` | Cancels a queued job at once; a running job stops at its next check. |
@@ -243,7 +246,7 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | `POST` | `/files/move` | Moves a file inside `ALLOWED_ROOT`; body `{ "src": "...", "dst": "..." }`. |
 | `POST` | `/files/organize` | Sorts a folder's files by extension; body `{ "folder": "..." }`. |
 
-Pass the returned `conversation_id` back to continue the same conversation. Both chat routes save every turn to SQLite: the question before the model runs, and the reply afterwards, marked `incomplete` if it was cut off. Every chat belongs to a project. Chats from before projects existed were moved into a project named General, which the desktop and the CLI use until the app has a project picker.
+Pass the returned `conversation_id` back to continue the same conversation. Both chat routes save every turn to SQLite: the question before the model runs, and the reply afterwards, marked `incomplete` if it was cut off. Every chat belongs to a project. Chats from before projects existed were moved into a project named General. The CLI always uses General; the desktop opens the project used last, or General.
 
 ## File-operation safety
 
@@ -285,9 +288,9 @@ A database migrated by a newer Locali is refused at startup rather than changed.
 ## Known limitations
 
 - Attachments, settings, workspace statistics and the context panel are hidden until the backend supports them.
-- The desktop has no project picker yet; it always works in the General project.
+- Projects can't be deleted from the desktop yet (use `DELETE /projects/{id}`), and a project's folders and instructions don't affect answers yet.
 - Retrieval is not yet limited to a project's folders: the chat's optional `project` field only filters sources by path text.
-- The catalog is only rescanned on request (`POST /projects/{id}/catalog`). On FAT and exFAT drives, such as most USB sticks, Windows file IDs change when a file moves, so a moved file there may get a new catalog id.
+- Changes made while Locali is closed are picked up by the next Scan files or Index now, not at startup. On FAT and exFAT drives, such as most USB sticks, Windows file IDs change when a file moves, so a moved file there may get a new catalog id.
 - Source chips can only reveal files inside the workspace folder; indexed files elsewhere are refused.
 - Electron Builder packages only `dist/` and Electron files. It does not bundle Python, the backend, Tesseract, or Ollama models.
 - The cross-encoder may download from Hugging Face on first use unless already cached.

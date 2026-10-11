@@ -34,9 +34,9 @@ After a backend route changes, run `uv run python -m scripts.export_openapi` in 
 | `electron/main.cjs` | Starts local services, opens the window, whitelisted IPC handlers, the chat and job WebSockets |
 | `electron/preload.cjs` | The `window.localiAPI` bridge |
 | `electron/api/` | `client.cjs`, the typed API client, and the generated `openapi.json` and `schema.d.ts` |
-| `src/components/Chat/` | Chat screen, conversation list, message bubbles, Indexed folders dialog, Background tasks panel, health banner |
+| `src/components/Chat/` | Chat screen, project switcher (custom menu) and Project dialog, conversation list, message bubbles, Indexed folders dialog, Background tasks panel, health banner |
 | `src/components/Intro/` | Startup intro (animation, synthesized sound) |
-| `src/hooks/` | `useChatStream` (streaming state), `useConversations` (sidebar list), `useCurrentProject` (the General project until there is a picker), `useFolders`, `useJobs`, `useHealth`, `useServicesReady`, `useTheme` (light/dark) |
+| `src/hooks/` | `useChatStream` (streaming state), `useConversations` (sidebar list), `useCurrentProject` (project list and the current one, remembered on this device), `useProject` (the Project dialog), `useFolders`, `useJobs`, `useHealth`, `useServicesReady`, `useTheme` (light/dark) |
 | `src/styles/tokens/` | Design tokens: primitives, semantic roles, spacing |
 
 ## Startup intro
@@ -72,7 +72,11 @@ files. Both are covered by the repository's MIT licence.
 | --- | --- |
 | `servicesReady()` | None; resolves once the main process has started (or given up waiting for) the API and Ollama |
 | `health()` | `GET /health/checks`; a "service not running" report if the API can't be reached |
-| `projects.list()` / `projects.create(name)` | `GET /projects` / `POST /projects` |
+| `projects.list()` / `projects.create(name, instructions)` | `GET /projects` / `POST /projects` |
+| `projects.get(id)` / `projects.update(id, name, instructions)` | `GET` / `PATCH /projects/{id}` |
+| `projects.chooseFolder(id, permission)` | Opens the native folder picker in the main process, then `POST /projects/{id}/folders`; the page never sends a path |
+| `projects.setFolderPermission(id, folderId, permission)` / `projects.removeFolder(id, folderId)` | `PATCH` / `DELETE /projects/{id}/folders/{folderId}` |
+| `projects.scanFiles(id)` | `POST /projects/{id}/catalog` (runs as a background job) |
 | `conversations.list(projectId)` | `GET /conversations?project_id=...` |
 | `conversations.open(id)` / `rename(id, title)` / `remove(id)` | `GET` / `PATCH` / `DELETE /conversations/{id}` |
 | `chatStream.start(message, projectId, conversationId, useDocs)` | WebSocket `/chat/stream` (`locali.chat.v2`); answers arrive through `onChunk`, `onFinal`, `onError` and `onDone` |

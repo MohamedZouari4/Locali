@@ -251,7 +251,30 @@ ipcMain.handle('api:chat:stream:stop', () => {
 
 ipcMain.handle('api:projects:list', () => api.listProjects());
 
-ipcMain.handle('api:projects:create', (_event, { name }) => api.createProject(name));
+ipcMain.handle('api:projects:create', (_event, { name, instructions }) => api.createProject(name, instructions));
+
+ipcMain.handle('api:projects:get', (_event, { id }) => api.getProject(id));
+
+ipcMain.handle('api:projects:update', (_event, { id, name, instructions }) => api.updateProject(id, name, instructions));
+
+// Like api:folders:choose, the folder comes from the native picker opened here, never from the page.
+// The backend checks it against the exclusions and the project's other folders.
+ipcMain.handle('api:projects:folders:choose', async (event, { id, permission }) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+    title: 'Choose a folder for this project',
+    properties: ['openDirectory'],
+  });
+  if (canceled || filePaths.length === 0) return null;
+  return api.addProjectFolder(id, filePaths[0], permission);
+});
+
+ipcMain.handle('api:projects:folders:permission', (_event, { id, folderId, permission }) =>
+  api.setProjectFolderPermission(id, folderId, permission)
+);
+
+ipcMain.handle('api:projects:folders:remove', (_event, { id, folderId }) => api.removeProjectFolder(id, folderId));
+
+ipcMain.handle('api:projects:scan', (_event, { id }) => api.scanProjectFiles(id));
 
 ipcMain.handle('api:conversations:list', (_event, { projectId }) => api.listConversations(projectId));
 

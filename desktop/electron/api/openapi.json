@@ -2227,6 +2227,11 @@
             },
             "type": "array",
             "title": "Folders"
+          },
+          "file_count": {
+            "type": "integer",
+            "title": "File Count",
+            "description": "Files in the project's catalog, as of its last scan."
           }
         },
         "type": "object",
@@ -2235,7 +2240,8 @@
           "name",
           "instructions",
           "created_at",
-          "folders"
+          "folders",
+          "file_count"
         ],
         "title": "Project"
       },

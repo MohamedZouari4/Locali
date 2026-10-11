@@ -56,8 +56,36 @@ function createApiClient(baseUrl, getToken) {
 
     listProjects: () => unwrap(client.GET('/projects')),
 
-    /** @param {string} name */
-    createProject: (name) => unwrap(client.POST('/projects', { body: { name, instructions: '' } })),
+    /** @param {string} name @param {string} [instructions] */
+    createProject: (name, instructions = '') => unwrap(client.POST('/projects', { body: { name, instructions } })),
+
+    /** @param {string} id */
+    getProject: (id) => unwrap(client.GET('/projects/{project_id}', { params: { path: { project_id: id } } })),
+
+    /** @param {string} id @param {string} name @param {string} instructions */
+    updateProject: (id, name, instructions) =>
+      unwrap(client.PATCH('/projects/{project_id}', { params: { path: { project_id: id } }, body: { name, instructions } })),
+
+    /** @param {string} id @param {string} path @param {'read' | 'act'} permission */
+    addProjectFolder: (id, path, permission) =>
+      unwrap(client.POST('/projects/{project_id}/folders', { params: { path: { project_id: id } }, body: { path, permission } })),
+
+    /** @param {string} id @param {number} folderId @param {'read' | 'act'} permission */
+    setProjectFolderPermission: (id, folderId, permission) =>
+      unwrap(
+        client.PATCH('/projects/{project_id}/folders/{folder_id}', {
+          params: { path: { project_id: id, folder_id: folderId } },
+          body: { permission },
+        }),
+      ),
+
+    /** @param {string} id @param {number} folderId */
+    removeProjectFolder: (id, folderId) =>
+      unwrap(client.DELETE('/projects/{project_id}/folders/{folder_id}', { params: { path: { project_id: id, folder_id: folderId } } })),
+
+    // Queues a catalog job; its progress arrives on the /jobs/events socket like any other job.
+    /** @param {string} id */
+    scanProjectFiles: (id) => unwrap(client.POST('/projects/{project_id}/catalog', { params: { path: { project_id: id } } })),
 
     // Queued and running jobs, newest first; live changes arrive on the /jobs/events socket.
     listActiveJobs: () => unwrap(client.GET('/jobs', { params: { query: { state: ['queued', 'running'] } } })),

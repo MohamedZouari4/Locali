@@ -1,5 +1,6 @@
-// Main chat screen: sidebar with saved conversations and background tasks, message list, and composer with the "Use my docs" toggle.
-// The sidebar footer opens the Indexed folders dialog. Features without backend support yet
+// Main chat screen: sidebar with the project switcher, saved conversations and background tasks, message list, and composer
+// with the "Use my docs" toggle. The switcher opens the Project dialog (new project, settings); switching projects starts a
+// new chat, since every chat belongs to one project. The sidebar footer opens the Indexed folders dialog. Features without backend support yet
 // (attachments, settings, workspace stats, context panel) are hidden.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -9,6 +10,7 @@ import { useCurrentProject } from '../../hooks/useCurrentProject'
 import { useFolders } from '../../hooks/useFolders'
 import { useHealth } from '../../hooks/useHealth'
 import { useJobs } from '../../hooks/useJobs'
+import { useProject } from '../../hooks/useProject'
 import { useTheme } from '../../hooks/useTheme'
 import { BrandMark, Icon } from '../Icon'
 import { ConversationList } from './ConversationList'
@@ -16,6 +18,8 @@ import { FoldersDialog } from './FoldersDialog'
 import { HealthBanner } from './HealthBanner'
 import { JobsPanel } from './JobsPanel'
 import { MessageBubble } from './MessageBubble'
+import { ProjectDialog } from './ProjectDialog'
+import { ProjectSwitcher } from './ProjectSwitcher'
 import './ChatScreen.css'
 
 const suggestions = [
@@ -29,10 +33,12 @@ const suggestions = [
 const narrowScreen = '(max-width: 720px)'
 
 export function ChatScreen() {
-  const { projectId, error: projectError } = useCurrentProject()
+  const { projects, projectId, selectProject, createProject, refreshProjects, error: projectError } = useCurrentProject()
   const { messages, conversationId, sendMessage, retry, stop, loadConversation, newChat } = useChatStream(projectId)
   const { conversations, error: conversationsError, refresh, rename, remove } = useConversations(projectId)
   const { jobs, cancel: cancelJob } = useJobs()
+  const projectSettings = useProject(projectId, jobs)
+  const [projectDialog, setProjectDialog] = useState(null) // null, 'create' or 'edit'
   const { folders, message: folderMessage, addFolder, removeFolder, indexNow, clearMessage } = useFolders()
   const [foldersOpen, setFoldersOpen] = useState(false)
   const { theme, toggleTheme } = useTheme()
@@ -81,6 +87,32 @@ export function ChatScreen() {
     closeSidebarOnNarrowScreen()
   }
 
+  const switchProject = (id) => {
+    if (id === projectId) return
+    if (isBusy) stop()
+    newChat()
+    setDraft('')
+    selectProject(id)
+  }
+
+  // Throws with the backend's message (for example a taken name), which the dialog shows.
+  const createAndOpenProject = async (name, instructions) => {
+    if (isBusy) stop()
+    await createProject(name, instructions)
+    newChat()
+    setDraft('')
+    setProjectDialog('edit')
+  }
+
+  const saveProject = async (name, instructions) => {
+    if (await projectSettings.save(name, instructions)) await refreshProjects()
+  }
+
+  const closeProjectDialog = () => {
+    setProjectDialog(null)
+    projectSettings.clearMessage()
+  }
+
   const deleteConversation = async (conversation) => {
     if (!window.confirm(`Delete "${conversation.title || 'Untitled chat'}"? This can't be undone.`)) return
     if ((await remove(conversation.id)) && conversation.id === conversationId) startNewChat()
@@ -125,6 +157,14 @@ export function ChatScreen() {
               <small>Personal AI workspace</small>
             </div>
           </div>
+
+          <ProjectSwitcher
+            projects={projects}
+            projectId={projectId}
+            onSelect={switchProject}
+            onCreate={() => setProjectDialog('create')}
+            onSettings={() => setProjectDialog('edit')}
+          />
 
           <button className="new-chat" type="button" onClick={startNewChat}>
             <Icon name="plus" /> New chat
@@ -221,6 +261,20 @@ export function ChatScreen() {
         </div>
       </main>
 
+      <ProjectDialog
+        key={`${projectDialog}-${projectSettings.project?.id}`}
+        open={projectDialog !== null}
+        mode={projectDialog}
+        project={projectSettings.project}
+        message={projectSettings.message}
+        onClose={closeProjectDialog}
+        onCreate={createAndOpenProject}
+        onSave={saveProject}
+        onAddFolder={projectSettings.addFolder}
+        onSetPermission={projectSettings.setPermission}
+        onRemoveFolder={projectSettings.removeFolder}
+        onScanFiles={projectSettings.scanFiles}
+      />
       <FoldersDialog open={foldersOpen} onClose={closeFolders} folders={folders} message={folderMessage} onAdd={addFolder} onRemove={removeFolder} onIndexNow={indexNow} />
     </div>
   )

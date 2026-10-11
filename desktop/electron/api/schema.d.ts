@@ -681,6 +681,11 @@ export interface components {
             created_at: string;
             /** Folders */
             folders: components["schemas"]["ProjectFolder"][];
+            /**
+             * File Count
+             * @description Files in the project's catalog, as of its last scan.
+             */
+            file_count: number;
         };
         /** ProjectFolder */
         ProjectFolder: {

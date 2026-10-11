@@ -10,7 +10,15 @@ contextBridge.exposeInMainWorld('localiAPI', {
 
   projects: {
     list: () => ipcRenderer.invoke('api:projects:list'),
-    create: (name) => ipcRenderer.invoke('api:projects:create', { name }),
+    create: (name, instructions) => ipcRenderer.invoke('api:projects:create', { name, instructions }),
+    get: (id) => ipcRenderer.invoke('api:projects:get', { id }),
+    update: (id, name, instructions) => ipcRenderer.invoke('api:projects:update', { id, name, instructions }),
+    // Opens the native folder picker in the main process; resolves to the added folder, or null if cancelled.
+    chooseFolder: (id, permission) => ipcRenderer.invoke('api:projects:folders:choose', { id, permission }),
+    setFolderPermission: (id, folderId, permission) =>
+      ipcRenderer.invoke('api:projects:folders:permission', { id, folderId, permission }),
+    removeFolder: (id, folderId) => ipcRenderer.invoke('api:projects:folders:remove', { id, folderId }),
+    scanFiles: (id) => ipcRenderer.invoke('api:projects:scan', { id }),
   },
 
   conversations: {
