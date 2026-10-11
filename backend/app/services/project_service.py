@@ -1,8 +1,7 @@
-"""Projects: a name, instructions for the assistant, and the folders it may use, each with Read or Act.
-
+"""Projects: a name, instructions for the assistant, and the folders it may use, each with Read or Act permissions.
 A folder passes the same checks as an indexed folder before it is added (folder_service.check_folder).
-Deleting a project deletes its folder list and its conversations, never the files in its folders.
-There is no per-project index or cache yet; when there is, deleting a project must clear it here too.
+Deleting a project deletes its folder list, its file catalog and its conversations, never the files in
+its folders. There is no per-project search index yet; when there is, deleting a project must clear it too.
 """
 
 import sqlite3

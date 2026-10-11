@@ -373,6 +373,30 @@ export interface paths {
         patch: operations["set_folder_permission_projects__project_id__folders__folder_id__patch"];
         trace?: never;
     };
+    "/projects/{project_id}/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Catalog
+         * @description The files the last catalog scan found, in path order.
+         */
+        get: operations["list_catalog_projects__project_id__catalog_get"];
+        put?: never;
+        /**
+         * Scan Catalog
+         * @description Queues a `catalog` job that lists the files in the project's folders; follow it on /jobs/events.
+         */
+        post: operations["scan_catalog_projects__project_id__catalog_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -418,6 +442,37 @@ export interface components {
              * @enum {string}
              */
             permission: "read" | "act";
+        };
+        /** CatalogFile */
+        CatalogFile: {
+            /**
+             * Id
+             * @description Stable identity: kept when the file is renamed or moved within its folders.
+             */
+            id: number;
+            /** Path */
+            path: string;
+            /** Name */
+            name: string;
+            /**
+             * Extension
+             * @description Lower case, without the dot; empty if the name has none.
+             */
+            extension: string;
+            /** Size */
+            size: number;
+            /**
+             * File Created At
+             * @description UTC. Null where the file system doesn't record it.
+             */
+            file_created_at: string | null;
+            /** File Modified At */
+            file_modified_at: string;
+            /**
+             * Catalogued At
+             * @description When the catalog first found the file.
+             */
+            catalogued_at: string;
         };
         /** ChatRequest */
         ChatRequest: {
@@ -1775,6 +1830,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectFolder"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_catalog_projects__project_id__catalog_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                authorization?: string;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogFile"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_catalog_projects__project_id__catalog_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
                 };
             };
             /** @description Validation Error */

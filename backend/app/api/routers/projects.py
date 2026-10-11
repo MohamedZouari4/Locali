@@ -1,14 +1,16 @@
-"""Project routes: create, list, open, update and delete projects, and add, change and remove their
-folders. See app/services/project_service.py for the checks and what deleting a project removes.
+"""Project routes: create, list, open, update and delete projects, add, change and remove their
+folders, and scan and list their file catalog. See app/services/project_service.py for the checks
+and what deleting a project removes.
 """
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field, StringConstraints
 
 from app.db import database
-from app.services import project_service
+from app.job_events import Job
+from app.services import catalog_service, project_service
 from app.services.folder_service import FolderRefused
 
 router = APIRouter(prefix="/projects")
@@ -49,6 +51,17 @@ class UpdateProjectRequest(BaseModel):
 class AddProjectFolderRequest(BaseModel):
     path: str = Field(min_length=1, max_length=1000, description="Full path of an existing folder.")
     permission: Permission = "read"
+
+
+class CatalogFile(BaseModel):
+    id: int = Field(description="Stable identity: kept when the file is renamed or moved within its folders.")
+    path: str
+    name: str
+    extension: str = Field(description="Lower case, without the dot; empty if the name has none.")
+    size: int
+    file_created_at: str | None = Field(description="UTC. Null where the file system doesn't record it.")
+    file_modified_at: str
+    catalogued_at: str = Field(description="When the catalog first found the file.")
 
 
 class FolderPermissionRequest(BaseModel):
@@ -132,3 +145,20 @@ def remove_project_folder(project_id: str, folder_id: int):
     if not database.remove_project_folder(project_id, folder_id):
         raise _folder_not_found()
     return Response(status_code=204)
+
+
+@router.post("/{project_id}/catalog", status_code=202, response_model=Job)
+def scan_catalog(project_id: str):
+    """Queues a `catalog` job that lists the files in the project's folders; follow it on /jobs/events."""
+    job = catalog_service.start_scan(project_id)
+    if job is None:
+        raise _project_not_found()
+    return job
+
+
+@router.get("/{project_id}/catalog", response_model=list[CatalogFile])
+def list_catalog(project_id: str, limit: int = Query(1000, ge=1, le=10000), offset: int = Query(0, ge=0)):
+    """The files the last catalog scan found, in path order."""
+    if database.get_project(project_id) is None:
+        raise _project_not_found()
+    return database.list_catalog_files(project_id, limit, offset)

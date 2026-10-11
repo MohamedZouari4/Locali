@@ -1,5 +1,6 @@
 """SQLite persistence (assistant.db): conversations, their messages, an audit_log table that
-mirrors file-tool actions, and the background job queue run by app/jobs/worker.py.
+mirrors file-tool actions, the background job queue run by app/jobs/worker.py, projects, and each
+project's file catalog.
 """
 
 import contextlib
@@ -341,14 +342,14 @@ def update_project(project_id, name=None, instructions=None):
 
 
 def delete_project(project_id):
-    """Deletes the project, its folder list, and its conversations with their messages, in one transaction.
+    """Deletes the project, its folder list and catalog, and its conversations with their messages, in one transaction.
 
     Only rows are deleted, never the files in the project's folders. Returns False if it doesn't exist.
     """
     with _transaction() as conn:
         conn.execute("DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE project_id = ?)", (project_id,))
         conn.execute("DELETE FROM conversations WHERE project_id = ?", (project_id,))
-        # project_folders rows go with it (ON DELETE CASCADE).
+        # project_folders and catalog_files rows go with it (ON DELETE CASCADE).
         return conn.execute("DELETE FROM projects WHERE id = ?", (project_id,)).rowcount > 0
 
 
@@ -376,6 +377,48 @@ def remove_project_folder(project_id, folder_id):
     """Takes the folder off the project; its files are not touched. Returns False if the project has no such folder."""
     with _transaction() as conn:
         return conn.execute("DELETE FROM project_folders WHERE id = ? AND project_id = ?", (folder_id, project_id)).rowcount > 0
+
+
+_CATALOG_COLUMNS = "file_key, path, name, extension, size, file_created_at, file_modified_at, content_hash"
+
+
+def list_catalog_records(project_id):
+    """Every catalog row of the project, with the fields a scan matches files on."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT id, file_key, path, size, file_modified_at, content_hash FROM catalog_files WHERE project_id = ?", (project_id,)
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def save_catalog_scan(project_id, updates, inserts, delete_ids):
+    """Saves one scan in one transaction. Deletes run first, so a key they free can be reused."""
+    with _transaction() as conn:
+        conn.executemany("DELETE FROM catalog_files WHERE id = ? AND project_id = ?", [(i, project_id) for i in delete_ids])
+        conn.executemany(
+            "UPDATE catalog_files SET file_key = :file_key, path = :path, name = :name, extension = :extension, size = :size,"
+            " file_created_at = :file_created_at, file_modified_at = :file_modified_at, content_hash = :content_hash"
+            " WHERE id = :id",
+            updates,
+        )
+        conn.executemany(
+            f"INSERT INTO catalog_files (project_id, {_CATALOG_COLUMNS}) VALUES (:project_id, :file_key, :path, :name,"
+            " :extension, :size, :file_created_at, :file_modified_at, :content_hash)",
+            [{**file, "project_id": project_id} for file in inserts],
+        )
+
+
+def list_catalog_files(project_id, limit=1000, offset=0):
+    """The project's catalogued files in path order."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT id, path, name, extension, size, file_created_at, file_modified_at, catalogued_at FROM catalog_files"
+        " WHERE project_id = ? ORDER BY path LIMIT ? OFFSET ?",
+        (project_id, limit, offset),
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 
 if __name__ == "__main__":

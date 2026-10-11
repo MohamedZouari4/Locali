@@ -133,7 +133,30 @@ def _003_general_project(conn):
     conn.execute("UPDATE conversations SET project_id = (SELECT id FROM projects WHERE name = 'General') WHERE project_id IS NULL")
 
 
-MIGRATIONS = [_001_initial, _002_projects, _003_general_project]
+def _004_catalog(conn):
+    # One row per file in a project's folders. The id is the file's stable identity: a rescan finds the
+    # row again by file_key (the OS file identifier, or "path:..." where there is none), so a renamed or
+    # moved file keeps its id. content_hash is only kept for files without an OS identifier.
+    conn.execute("""
+        CREATE TABLE catalog_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            file_key TEXT NOT NULL,
+            path TEXT NOT NULL,
+            name TEXT NOT NULL,
+            extension TEXT NOT NULL,
+            size INTEGER NOT NULL,
+            file_created_at TEXT,
+            file_modified_at TEXT NOT NULL,
+            content_hash TEXT,
+            catalogued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (project_id, file_key)
+        )
+    """)
+    conn.execute("CREATE INDEX idx_catalog_files_path ON catalog_files(project_id, path)")
+
+
+MIGRATIONS = [_001_initial, _002_projects, _003_general_project, _004_catalog]
 
 
 def schema_version(conn):

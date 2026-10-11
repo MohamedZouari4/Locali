@@ -15,6 +15,7 @@ A local-first RAG (retrieval-augmented generation) assistant that indexes files 
 - Local Ollama chat and embedding models; answers stream token by token over a WebSocket.
 - Projects: each has its own instructions and folders (with a Read or Act permission), and every chat belongs to one project. Folder paths are checked against the project boundary, with links, junctions and shortcuts resolved first.
 - Folders to index are chosen in the app. Indexing and forgetting a folder run as background jobs, with live progress and cancellation.
+- A file catalog per project: the name, type, size and dates of every file in the project's folders, scanned as a background job. Each file keeps a stable id when it is renamed or moved.
 - Health checks for the model runtime, the required models, free disk space and OCR, each with a fix when something is wrong.
 - Sandboxed file tools (list, move, create folder, organize by extension, find empty files) restricted to one workspace folder. Tools are withheld whenever file contents are in the prompt.
 - Hash-chained, tamper-evident action log in `logs/actions.log`, mirrored into SQLite.
@@ -58,6 +59,7 @@ backend/                         Python backend (run Python commands from here)
          chat/                   orchestrator, prompts, tool_schema
       services/                  rules between routers and the rest: chat, projects, project_boundary, folders, health, rag, tools
       jobs/                      worker.py (background job queue), demo.py (test job kind)
+      catalog/                   scanner.py (walks a project's folders, stable file identity)
       db/                        database.py (SQLite), migrations.py (schema versions)
       tools/                     file_tools.py (sandboxed tools), audit_log.py (hash chain)
       chat_events.py             /chat/stream event contract (docs/CHAT_EVENTS.md)
@@ -224,7 +226,9 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | `POST` | `/projects/{id}/folders` | Adds a folder; body `{ "path": "...", "permission": "read" }`; `201`, or `422` with the reason (missing, system/private/ignored folder, already in the project). |
 | `PATCH` | `/projects/{id}/folders/{folder_id}` | Switches a folder between `read` and `act`; body `{ "permission": "act" }`. |
 | `DELETE` | `/projects/{id}/folders/{folder_id}` | Takes a folder off the project; its files are not touched. `204`, or `404` if unknown. |
-| `POST` | `/jobs` | Starts a background job; body `{ "kind": "...", "params": {...}, "project": "default" }`; `202`, `422` for an unknown kind, or `409` if that kind allows only one active job. Kinds: `ingest`, `forget_folder`, and `demo` with `LOCALI_DEMO_JOBS=1`. |
+| `POST` | `/projects/{id}/catalog` | Queues a `catalog` job that lists every file in the project's folders; `202` with the job, or `404`. Follow it on `/jobs/events`. |
+| `GET` | `/projects/{id}/catalog?limit=1000&offset=0` | The catalogued files in path order: `id` (kept across renames and moves), `path`, `name`, `extension`, `size`, `file_created_at`, `file_modified_at`, `catalogued_at`. |
+| `POST` | `/jobs` | Starts a background job; body `{ "kind": "...", "params": {...}, "project": "default" }`; `202`, `422` for an unknown kind, or `409` if that kind allows only one active job. Kinds: `ingest`, `forget_folder`, `catalog`, and `demo` with `LOCALI_DEMO_JOBS=1`. |
 | `GET` | `/jobs?state=...&limit=50` | Jobs newest first, optionally only some states. |
 | `GET` | `/jobs/{id}` | One job with its state, progress and result or error; `404` if unknown. |
 | `POST` | `/jobs/{id}/cancel` | Cancels a queued job at once; a running job stops at its next check. |
@@ -283,6 +287,7 @@ A database migrated by a newer Locali is refused at startup rather than changed.
 - Attachments, settings, workspace statistics and the context panel are hidden until the backend supports them.
 - The desktop has no project picker yet; it always works in the General project.
 - Retrieval is not yet limited to a project's folders: the chat's optional `project` field only filters sources by path text.
+- The catalog is only rescanned on request (`POST /projects/{id}/catalog`). On FAT and exFAT drives, such as most USB sticks, Windows file IDs change when a file moves, so a moved file there may get a new catalog id.
 - Source chips can only reveal files inside the workspace folder; indexed files elsewhere are refused.
 - Electron Builder packages only `dist/` and Electron files. It does not bundle Python, the backend, Tesseract, or Ollama models.
 - The cross-encoder may download from Hugging Face on first use unless already cached.

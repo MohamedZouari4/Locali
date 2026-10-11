@@ -8,7 +8,7 @@ import unittest
 
 from app.db import migrations
 
-TABLES = {"conversations", "messages", "audit_log", "jobs", "indexed_folders", "projects", "project_folders"}
+TABLES = {"conversations", "messages", "audit_log", "jobs", "indexed_folders", "projects", "project_folders", "catalog_files"}
 
 
 def _add_pinned(conn):
@@ -110,6 +110,18 @@ class MigrationsTestCase(unittest.TestCase):
         migrations.migrate(self.conn)
 
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0], 0)
+
+    def test_the_catalog_is_added_empty_and_existing_projects_are_kept(self):
+        migrations.migrate(self.conn, migrations.MIGRATIONS[:3])
+        with self.conn:
+            self.conn.execute("INSERT INTO projects (id, name) VALUES ('p1', 'Thesis')")
+            self.conn.execute("INSERT INTO conversations (id, title, project_id) VALUES ('c1', 'kept', 'p1')")
+
+        migrations.migrate(self.conn)
+
+        self.assertEqual(self.conn.execute("SELECT id, name FROM projects").fetchall(), [("p1", "Thesis")])
+        self.assertEqual(self.conn.execute("SELECT project_id FROM conversations").fetchall(), [("p1",)])
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM catalog_files").fetchone()[0], 0)
 
     def test_running_again_applies_nothing(self):
         migrations.migrate(self.conn)
