@@ -37,6 +37,8 @@ class LimitSettings:
     job_poll_seconds: float = 1.0  # how often the idle job worker checks for queued jobs
     job_progress_interval_seconds: float = 1.0  # a job's progress is saved at most this often
     job_cancel_check_seconds: float = 0.5  # a running job reads its cancel flag at most this often
+    watch_debounce_ms: int = 800  # the file watcher handles changes in batches collected over this long
+    watch_folders_check_seconds: float = 5.0  # how often the file watcher looks for added or removed folders
 
 
 @dataclass(frozen=True)
@@ -205,6 +207,8 @@ RERANK_BATCH_SIZE = LIMITS.rerank_batch_size
 RERANK_TIMEOUT_MS = LIMITS.rerank_timeout_ms
 MIN_FREE_DISK_MB = LIMITS.min_free_disk_mb
 JOB_POLL_SECONDS = LIMITS.job_poll_seconds
+WATCH_DEBOUNCE_MS = LIMITS.watch_debounce_ms
+WATCH_FOLDERS_CHECK_SECONDS = LIMITS.watch_folders_check_seconds
 JOB_PROGRESS_INTERVAL_SECONDS = LIMITS.job_progress_interval_seconds
 JOB_CANCEL_CHECK_SECONDS = LIMITS.job_cancel_check_seconds
 JOB_EVENTS_POLL_SECONDS = LIMITS.job_events_poll_seconds

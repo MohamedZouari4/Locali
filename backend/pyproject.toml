@@ -17,6 +17,7 @@ dependencies = [
     # Listed directly so it can come from the CPU-only index below (the reranker runs on CPU).
     "torch>=2.13.0",
     "uvicorn>=0.50.0",
+    "watchfiles>=1.3.0",
 ]
 
 [dependency-groups]

@@ -36,6 +36,7 @@ class ProjectSummary(BaseModel):
 
 class Project(ProjectSummary):
     folders: list[ProjectFolder]
+    file_count: int = Field(description="Files in the project's catalog, as of its last scan.")
 
 
 class CreateProjectRequest(BaseModel):

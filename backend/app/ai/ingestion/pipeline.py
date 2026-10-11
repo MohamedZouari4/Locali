@@ -1,7 +1,7 @@
 """Ingestion pipeline: walks the scan roots (folders chosen in the app plus SCAN_DRIVES), extracts
 text from supported files, redacts PII and secrets, splits the text into section chunks, embeds them
 with Ollama and stores them in ChromaDB.
-
+index_paths brings only some files up to date; the file watcher's `reindex` job uses it for files that changed.
 Run from the backend folder: `python -m app.ai.ingestion.pipeline` to ingest then prune stale entries,
 or pass `--prune-only` or `--search "query" [--source-type code]`.
 """
@@ -75,6 +75,71 @@ def forget_folder(folder, report=None):
     return removed
 
 
+def index_file(path, max_size_mb=MAX_FILE_SIZE_MB):
+    """Index one file if it is new or changed. Returns ("indexed", chunk count), ("unchanged", 0) or
+    ("skipped", 0) for a skipped extension, an oversized, unsafe, unreadable or empty file."""
+    if path.lower().rsplit(".", 1)[-1] in config.SKIP_EXTENSIONS:
+        return "skipped", 0
+
+    source = os.path.abspath(path)
+    try:
+        ext = Path(source).suffix.lower().lstrip(".") or "unknown"
+        file_size = os.path.getsize(path)
+        if file_size > max_size_mb * 1024 * 1024:
+            print(f"Skipped {path}: file too large (>{max_size_mb}MB)")
+            return "skipped", 0
+
+        sniffed_kind, is_safe = sniff_mime(path, ext)
+        if not is_safe:
+            print(f"Skipped {path}: MIME pre-check failed (sniffed as '{sniffed_kind}', declared .{ext})")
+            return "skipped", 0
+
+        content_hash = file_hash(path)
+        if store.stored_hash(source) == content_hash:
+            return "unchanged", 0
+
+        print(f"Processing: {path}")
+        mtime = os.path.getmtime(path)
+        text = read_text(path)
+        if text:
+            text = text.encode("utf-8", "ignore").decode("utf-8")
+    except Exception as error:
+        print(f"Skipped {path}: {error}")
+        return "skipped", 0
+
+    if not text or not text.strip():
+        print("  -> skipped (empty)")
+        return "skipped", 0
+
+    source_type = get_source_type(ext)
+    chunks = chunk_by_section(text, make_document_id(content_hash), source, ext, source_type)
+    store.replace_source_chunks(source, chunks, mtime, content_hash)
+    print(f"  -> indexed ({len(chunks)} chunks)")
+    return "indexed", len(chunks)
+
+
+def index_paths(paths, report=None):
+    """Bring the index up to date for these files only, and return the counts. A file that is new or
+    changed is (re)indexed; one that is gone, outside the scan roots, excluded, sensitive or can no longer
+    be indexed loses its old chunks, so stale text never reaches an answer.
+
+    `report(current, total, message)` works as in ingest_all.
+    """
+    roots = scan_roots()
+    counts = {"indexed": 0, "unchanged": 0, "skipped": 0, "removed": 0}
+    for done, path in enumerate(paths):
+        if report:
+            report(done, len(paths), f"Updating {os.path.basename(path)}")
+        source = os.path.abspath(path)
+        allowed = os.path.isfile(path) and not is_excluded_path(path, roots) and os.path.basename(path) not in config.SENSITIVE_FILES
+        status = index_file(path)[0] if allowed else "skipped"
+        if status == "skipped" and store.stored_hash(source) is not None:
+            store.delete_source(source)
+            status = "removed"
+        counts[status] += 1
+    return counts
+
+
 def ingest_all(max_size_mb=MAX_FILE_SIZE_MB, progress_every=500, report=None):
     """Index every new or changed file under the scan roots and return the counts.
 
@@ -110,53 +175,14 @@ def ingest_all(max_size_mb=MAX_FILE_SIZE_MB, progress_every=500, report=None):
                 f"- indexed {indexed}, unchanged {unchanged}, skipped {skipped}"
             )
 
-        if path.lower().rsplit(".", 1)[-1] in config.SKIP_EXTENSIONS:
+        status, chunks = index_file(path, max_size_mb)
+        if status == "indexed":
+            indexed += 1
+            chunk_total += chunks
+        elif status == "unchanged":
+            unchanged += 1
+        else:
             skipped += 1
-            continue
-
-        source = os.path.abspath(path)
-        try:
-            ext = Path(source).suffix.lower().lstrip(".") or "unknown"
-            file_size = os.path.getsize(path)
-            if file_size > max_size_mb * 1024 * 1024:
-                print(f"Skipped {path}: file too large (>{max_size_mb}MB)")
-                skipped += 1
-                continue
-
-            sniffed_kind, is_safe = sniff_mime(path, ext)
-            if not is_safe:
-                print(f"Skipped {path}: MIME pre-check failed (sniffed as '{sniffed_kind}', declared .{ext})")
-                skipped += 1
-                continue
-
-            content_hash = file_hash(path)
-            if store.stored_hash(source) == content_hash:
-                unchanged += 1
-                continue
-
-            print(f"Processing: {path}")
-            mtime = os.path.getmtime(path)
-            text = read_text(path)
-            if text:
-                text = text.encode("utf-8", "ignore").decode("utf-8")
-        except Exception as error:
-            print(f"Skipped {path}: {error}")
-            skipped += 1
-            continue
-
-        if not text or not text.strip():
-            print("  -> skipped (empty)")
-            skipped += 1
-            continue
-
-        source_type = get_source_type(ext)
-        chunks = chunk_by_section(text, make_document_id(content_hash), source, ext, source_type)
-
-        store.replace_source_chunks(source, chunks, mtime, content_hash)
-        chunk_total += len(chunks)
-        indexed += 1
-        print(f"  -> indexed ({len(chunks)} chunks)")
-
     elapsed = time.time() - start_time
     print(
         f"Indexed {indexed} files ({chunk_total} chunks), skipped {skipped} unsupported/empty/oversized files, "

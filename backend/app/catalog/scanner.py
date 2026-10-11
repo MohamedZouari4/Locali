@@ -11,6 +11,8 @@ A file is recognised, in this order, by:
 The walk follows the ingestion ignore rules (system, privacy and ignored folders, sensitive files) and
 never follows symbolic links or junctions, so it can't leave the project's folders. Files with skipped
 extensions are still listed: the catalog records that a file exists, not what it contains.
+scan_changes builds a partial scan from the paths the file watcher reported; match then only removes
+records under those paths.
 """
 
 import hashlib
@@ -96,6 +98,43 @@ def scan(folders, report=None):
     return result
 
 
+def _allowed_file(path):
+    return os.path.basename(path) not in config.SENSITIVE_FILES and exclusion_reason(os.path.dirname(path)) is None
+
+
+def scan_changes(paths, folders):
+    """A partial Scan of the changed paths inside `folders`, and the paths it covers (for match's `scope`).
+
+    A changed folder is walked whole, since a folder moved in arrives as one event. A path that no longer
+    exists stays in the scope, so its record, or every record under it if it was a folder, is removed
+    unless the file turns up elsewhere in the same batch.
+    """
+    result = Scan()
+    found = {}
+    scope = []
+    for path in paths:
+        if not any(is_under(path, folder) for folder in folders):
+            continue
+        scope.append(path)
+        if os.path.islink(path) or os.path.isjunction(path):
+            continue
+        if os.path.isdir(path):
+            partial = scan([path])
+            result.unreadable.extend(partial.unreadable)
+            files = partial.files
+        elif os.path.isfile(path) and _allowed_file(path):
+            try:
+                files = [read_file(path)]
+            except OSError:  # deleted again since the event
+                files = []
+        else:
+            files = []
+        for file in files:
+            found[_path_key(file["path"])] = file
+    result.files = list(found.values())
+    return result, scope
+
+
 def _hash(path):
     digest = hashlib.sha256()
     with open(path, "rb") as f:
@@ -104,7 +143,7 @@ def _hash(path):
     return digest.hexdigest()
 
 
-def match(records, scan):
+def match(records, scan, scope=None):
     """Pairs the scanned files with the stored records (dicts with id, file_key, path, size,
     file_modified_at and content_hash). Returns (updates, inserts, delete_ids, renamed): updates are
     file dicts with the id of their record, inserts are new files, and renamed counts records whose path changed.
@@ -149,6 +188,8 @@ def match(records, scan):
     delete_ids = [
         record["id"]
         for record in records
-        if record["id"] not in matched and not any(is_under(record["path"], folder) for folder in scan.unreadable)
+        if record["id"] not in matched
+        and not any(is_under(record["path"], folder) for folder in scan.unreadable)
+        and (scope is None or any(is_under(record["path"], path) for path in scope))
     ]
     return updates, inserts, delete_ids, renamed

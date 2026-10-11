@@ -5,10 +5,13 @@ with the job, progress is reported per file, and the job can be cancelled. Only 
 queued or running at a time. When a run ends, the keyword-search caches are rebuilt so newly indexed
 files are searchable straight away.
 
-Importing this module registers the `ingest` and `forget_folder` job kinds; app/api/main.py imports it through the routers.
+The file watcher queues a `reindex` job for files that were created or changed in the indexed folders.
+
+Importing this module registers the `ingest`, `forget_folder` and `reindex` job kinds; app/api/main.py imports it through the routers.
 """
 
 from app.ai.ingestion import forget_folder, ingest_all, prune_stale, reset_index
+from app.ai.ingestion.pipeline import index_paths
 from app.ai.retrieval import retrieve
 from app.ai.retrieval.sparse_retriever import invalidate_caches
 from app.db import database
@@ -16,6 +19,7 @@ from app.jobs import worker
 
 INGEST_KIND = "ingest"
 FORGET_FOLDER_KIND = "forget_folder"
+REINDEX_KIND = "reindex"
 
 
 def run_ingestion(full_reset=False, report=None):
@@ -51,6 +55,21 @@ def run_forget_folder_job(params, ctx):
         return {"removed": forget_folder(params["path"], report=_reporter(ctx))}
     finally:
         invalidate_caches()
+
+
+@worker.handler(REINDEX_KIND)
+def run_reindex_job(params, ctx):
+    """Brings the index up to date for the files the watcher saw change. Runs in the same job queue as
+    ingestion ("default" project), so the two never write to the index at once."""
+    try:
+        return index_paths(params["paths"], report=_reporter(ctx))
+    finally:
+        invalidate_caches()
+
+
+def start_reindex(paths):
+    """Queue a reindex job for these files and return its id."""
+    return worker.submit(REINDEX_KIND, {"paths": sorted(paths)})
 
 
 def start_ingestion(full_reset=False):

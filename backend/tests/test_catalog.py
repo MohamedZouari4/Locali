@@ -238,6 +238,7 @@ class CatalogRouteTests(CatalogTestCase):
 
         self.assertEqual([(f["name"], f["extension"]) for f in files], [("notes.md", "md")])
         self.assertNotIn("file_key", files[0])
+        self.assertEqual(self.client.get(f"/projects/{self.project_id}").json()["file_count"], 1)
 
     def test_an_unknown_project_returns_404(self):
         self.assertEqual(self.client.post("/projects/missing/catalog").status_code, 404)

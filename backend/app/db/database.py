@@ -311,14 +311,16 @@ def create_project(name, instructions="", folders=()):
 
 
 def get_project(project_id):
-    """Returns the project with its folders in path order, or None if it doesn't exist."""
+    """Returns the project with its folders in path order and how many files its catalog holds, or None
+    if it doesn't exist."""
     conn = get_connection()
     row = conn.execute("SELECT id, name, instructions, created_at FROM projects WHERE id = ?", (project_id,)).fetchone()
     folders = conn.execute(
         "SELECT id, path, permission, added_at FROM project_folders WHERE project_id = ? ORDER BY path", (project_id,)
     ).fetchall()
+    file_count = conn.execute("SELECT COUNT(*) FROM catalog_files WHERE project_id = ?", (project_id,)).fetchone()[0]
     conn.close()
-    return {**dict(row), "folders": [dict(f) for f in folders]} if row else None
+    return {**dict(row), "folders": [dict(f) for f in folders], "file_count": file_count} if row else None
 
 
 def list_projects():
@@ -419,6 +421,17 @@ def list_catalog_files(project_id, limit=1000, offset=0):
     ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def list_all_project_folders():
+    """Every project's folder paths, as {project id: [path, ...]}, for the file watcher."""
+    conn = get_connection()
+    rows = conn.execute("SELECT project_id, path FROM project_folders ORDER BY project_id, path").fetchall()
+    conn.close()
+    folders = {}
+    for row in rows:
+        folders.setdefault(row["project_id"], []).append(row["path"])
+    return folders
 
 
 if __name__ == "__main__":

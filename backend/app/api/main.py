@@ -1,6 +1,7 @@
 """FastAPI application: registers request logging, the global error handler, and the chat,
 conversation, job, folder, ingestion, search and file routers, and runs the background job worker while
-the server is up. Starting it with LOCALI_DEMO_JOBS=1 adds the `demo` job kind (app/jobs/demo.py).
+the server is up, together with the file watcher (app/services/watch_service.py). Starting it with
+LOCALI_DEMO_JOBS=1 adds the `demo` job kind (app/jobs/demo.py).
 
 Every route except /health and /favicon.ico requires the bearer token; /health/checks has the details.
 Run from the backend folder with `python -m uvicorn app.api.main:app`.
@@ -22,6 +23,7 @@ from app.api.routers import chat, conversations, files, folders, health, ingest,
 from app.core.config import REPO_ROOT
 from app.db import database
 from app.jobs import demo, worker
+from app.services import watch_service
 
 
 @asynccontextmanager
@@ -31,7 +33,9 @@ async def lifespan(_app):
         demo.register()
     # Jobs a previous run left running are marked failed, then queued jobs start running.
     await asyncio.to_thread(worker.start_worker)
+    watch_service.start()
     yield
+    await asyncio.to_thread(watch_service.stop)
     await asyncio.to_thread(worker.stop_worker)
 
 
