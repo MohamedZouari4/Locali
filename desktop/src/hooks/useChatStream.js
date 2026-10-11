@@ -1,7 +1,7 @@
 // Hook that holds the chat messages and streams assistant replies from the main process over IPC.
 // A streaming answer always ends in one of three ways: done, error (with a retry), or stopped.
 // If the socket closes without done or error, that counts as an error, so the chat never stays loading.
-// It can also open a saved conversation, or clear the screen for a new one.
+// It can also open a saved conversation, or clear the screen for a new one. Messages go to the current project.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -34,7 +34,7 @@ function toChatMessage(message) {
   }
 }
 
-export function useChatStream() {
+export function useChatStream(projectId) {
   const [messages, setMessages] = useState([])
   const [activeConversationId, setActiveConversationId] = useState(null)
   const conversationId = useRef(null)
@@ -83,11 +83,15 @@ export function useChatStream() {
         updateStreaming({ isStreaming: false, error: 'Open Locali through Electron to connect to the local assistant.' })
         return
       }
+      if (!projectId) {
+        updateStreaming({ isStreaming: false, error: 'Your project is still loading. Try again in a moment.' })
+        return
+      }
       chatStream
-        .start(text, conversationId.current, useDocs)
+        .start(text, projectId, conversationId.current, useDocs)
         .catch((error) => updateStreaming({ isStreaming: false, error: readableError(error?.message) }))
     },
-    [updateStreaming],
+    [updateStreaming, projectId],
   )
 
   const sendMessage = useCallback(

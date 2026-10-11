@@ -1,13 +1,16 @@
 """Interactive command-line chat. Prefix a question with `doc:` to answer from indexed files.
 Run from the backend folder with `python -m app.cli` (add `--debug` to print prompts and tool calls).
+Chats go into the project named General, created on first use.
 """
 
 import sys
 
 from app.services.chat_service import get_answer
+from app.services.project_service import general_project
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+project_id = general_project()["id"]  # the CLI chats in the General project
 conversation_id = None  # the first answer starts a conversation
 print("Local AI Assistant - type 'exit' to quit")
 print("Prefix a question with 'doc:' to search your indexed files.\n")
@@ -25,7 +28,7 @@ while True:
     use_docs = user_input.lower().startswith("doc:")
     query = user_input[4:].strip() if use_docs else user_input
 
-    reply = get_answer(query, use_docs=use_docs, conversation_id=conversation_id)
+    reply = get_answer(query, project_id=project_id, use_docs=use_docs, conversation_id=conversation_id)
     conversation_id = reply["conversation_id"]
     answer, sources, used_tools = reply["response"], reply["sources"], reply["used_tools"]
 

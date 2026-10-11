@@ -28,6 +28,18 @@ def create_project(name, instructions=""):
         raise _name_taken(name) from None
 
 
+def general_project():
+    """The project named General, created if missing. The CLI chats there, and so does the desktop until it
+    has a project picker."""
+    for project in database.list_projects():
+        if project["name"].lower() == "general":
+            return project
+    try:
+        return create_project("General")
+    except ProjectNameTaken:  # another process created it just now
+        return general_project()
+
+
 def update_project(project_id, name=None, instructions=None):
     """Returns the updated project, or None if it doesn't exist. Raises ProjectNameTaken."""
     try:

@@ -12,6 +12,7 @@ from app.api.main import app
 from app.chat_events import CHAT_SUBPROTOCOL, chat_event_adapter
 from app.core.security import API_TOKEN
 from app.db import database
+from app.services import chat_service
 
 
 def _headers():
@@ -38,13 +39,13 @@ class ChatEventContractTests(unittest.TestCase):
     def test_websocket_only_sends_documented_events(self):
         with (
             patch.object(orchestrator.requests, "post", return_value=_ollama_reply("ok")),
-            patch.object(database, "begin_turn", return_value=("conv-1", 1)),
+            patch.object(chat_service, "begin_turn", return_value=("conv-1", 1)),
             patch.object(database, "finish_turn"),
         ):
             client = TestClient(app)
             with client.websocket_connect("/chat/stream", headers=_headers(), subprotocols=[CHAT_SUBPROTOCOL]) as ws:
                 self.assertEqual(ws.accepted_subprotocol, CHAT_SUBPROTOCOL)
-                ws.send_json({"message": "hello", "use_docs": False})
+                ws.send_json({"message": "hello", "project_id": "p1", "use_docs": False})
                 events = [ws.receive_json()]
                 while events[-1]["type"] not in ("done", "error"):
                     events.append(ws.receive_json())

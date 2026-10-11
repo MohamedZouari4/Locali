@@ -1,12 +1,13 @@
 """Conversation history: list past chats, open one with its messages, rename it, delete it.
 
 Chats are created and continued through /chat and /chat/stream; these routes only read and manage them.
+Every chat belongs to a project, and the list only ever shows one project's chats.
 """
 
 import json
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from app.db import database
@@ -17,6 +18,7 @@ router = APIRouter(prefix="/conversations")
 class ConversationSummary(BaseModel):
     id: str
     title: str | None
+    project_id: str | None
     started_at: str
     updated_at: str = Field(description="Time of the newest message; the list is sorted by this, newest first.")
     message_count: int
@@ -49,8 +51,11 @@ def _summary_or_404(conversation_id):
 
 
 @router.get("", response_model=list[ConversationSummary])
-def list_conversations():
-    return database.list_conversations()
+def list_conversations(project_id: str = Query(description="Only this project's chats are listed.")):
+    """404 if the project doesn't exist."""
+    if database.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return database.list_conversations(project_id)
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetail)

@@ -13,11 +13,14 @@ A local-first RAG (retrieval-augmented generation) assistant that indexes files 
 - Hybrid dense + BM25 retrieval merged with reciprocal rank fusion, then optional local cross-encoder re-ranking.
 - Project/file-name-aware retrieval filtering.
 - Local Ollama chat and embedding models; answers stream token by token over a WebSocket.
+- Projects: each has its own instructions and folders (with a Read or Act permission), and every chat belongs to one project. Folder paths are checked against the project boundary, with links, junctions and shortcuts resolved first.
+- Folders to index are chosen in the app. Indexing and forgetting a folder run as background jobs, with live progress and cancellation.
+- Health checks for the model runtime, the required models, free disk space and OCR, each with a fix when something is wrong.
 - Sandboxed file tools (list, move, create folder, organize by extension, find empty files) restricted to one workspace folder. Tools are withheld whenever file contents are in the prompt.
 - Hash-chained, tamper-evident action log in `logs/actions.log`, mirrored into SQLite.
-- FastAPI routes for chat, search, background ingestion, and file operations, behind a bearer token.
-- SQLite persistence for conversations, messages, and audit records.
-- Electron/React desktop UI with a context-isolated IPC bridge.
+- FastAPI routes for chat, conversations, projects, jobs, indexed folders, search, ingestion and file operations, behind a bearer token.
+- SQLite persistence for projects, conversations, jobs and audit records, with versioned schema migrations. Every chat turn is saved, and a reply cut off by an error, Stop or a crash is kept and marked incomplete.
+- Electron/React desktop UI with a context-isolated IPC bridge: streaming chat, conversation history, indexed folders, background tasks and a health banner.
 
 The desktop package is not yet self-contained: it does not bundle the Python runtime, backend, Tesseract, or Ollama models. See [Known limitations](#known-limitations).
 
@@ -30,10 +33,10 @@ desktop/  Electron + React renderer
             v
 Electron main process ---- HTTP/WebSocket + token ----> backend/  FastAPI on 127.0.0.1:8000
             |                                                  |
-            | starts local services                            +--> SQLite: conversations, audit
+            | starts local services                            +--> SQLite: projects, chats, jobs, audit
             v                                                  |
 Ollama on 127.0.0.1:11434 <-------------------------------+    v
-   qwen3:4b chat                                         Retrieval pipeline
+   qwen3:4b-instruct chat                                Retrieval pipeline
    nomic-embed-text embeddings                             Chroma dense search
                                                            BM25 sparse search
                                                            cross-encoder reranking
@@ -47,35 +50,39 @@ Ollama on 127.0.0.1:11434 <-------------------------------+    v
 backend/                         Python backend (run Python commands from here)
    app/
       api/                       FastAPI app: main.py, deps.py (token check), middleware.py, errors.py
-         routers/                chat, search, ingest, files
-      core/                      config.py (settings), logging.py, security.py (API token)
+         routers/                chat, conversations, projects, jobs, folders, ingest, search, files, health
+      core/                      config.py (settings), logging.py, security.py (API token), friendly_errors.py
       ai/
          ingestion/              walker, extractors, redaction, chunking, embeddings, store, pipeline
          retrieval/              dense, sparse (BM25), hybrid (RRF), reranker, retriever
          chat/                   orchestrator, prompts, tool_schema
-      services/                  use cases between routers and the AI/tool modules
+      services/                  rules between routers and the rest: chat, projects, project_boundary, folders, health, rag, tools
+      jobs/                      worker.py (background job queue), demo.py (test job kind)
       db/                        database.py (SQLite), migrations.py (schema versions)
       tools/                     file_tools.py (sandboxed tools), audit_log.py (hash chain)
+      chat_events.py             /chat/stream event contract (docs/CHAT_EVENTS.md)
+      job_events.py              /jobs/events event contract (docs/JOB_EVENTS.md)
       cli.py                     terminal chat
-   tests/                        unit, persistence, store, orchestrator, rerank and integration tests
+   tests/                        routes, persistence, migrations, project boundary, jobs, retrieval and integration tests
       fixtures/                  retrieval evaluation queries
-   scripts/                      eval_retrieval.py (hybrid vs reranked comparison)
+   scripts/                      eval_retrieval.py, baseline.py (timing run), export_openapi.py (API contract)
    pyproject.toml                dependencies (uv), ruff and pytest settings
    uv.lock                       exact versions of every package; commit it
    .python-version               Python version uv installs (3.12)
 desktop/                         Electron + React client (see desktop/README.md)
-docs/                            Tracked project docs; docs/private/ is gitignored
-.github/workflows/ci.yml         Lint and test on push and pull request
+docs/                            Event contracts, bridge audit, baseline, self-test log; docs/private/ is gitignored
+.github/workflows/ci.yml         Lint, test and API-contract checks on push and pull request
+AGENTS.md, CLAUDE.md             Instructions for AI coding agents working in this repository
 ```
 
-Runtime data lives in the repository root and is gitignored: `vector_store/`, `assistant.db`, `logs/`, `.auth_token` and `AI-Workspace/`. Paths are resolved from the repository root, so the backend finds them whichever folder it is started from.
+Runtime data lives in the repository root and is gitignored: `vector_store/`, `assistant.db` (and its `assistant.db.v<N>.bak` migration backups), `logs/`, `.auth_token` and `AI-Workspace/`. Paths are resolved from the repository root, so the backend finds them whichever folder it is started from.
 
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/) for Python and its packages. It installs Python 3.12 itself if needed.
 - Node.js and npm for the desktop client.
 - Ollama running locally at `http://127.0.0.1:11434` with:
-   - `qwen3:4b` for chat and tool calling.
+   - `qwen3:4b-instruct` for chat and tool calling.
    - `nomic-embed-text:latest` for embeddings.
 - Tesseract OCR for image ingestion. The Windows default is `C:/Program Files/Tesseract-OCR/tesseract.exe`.
 
@@ -86,12 +93,12 @@ cd backend
 uv sync              # creates backend/.venv with the exact versions in uv.lock
 uv run pre-commit install
 
-ollama pull qwen3:4b
+ollama pull qwen3:4b-instruct
 ollama pull nomic-embed-text
 ollama serve
 ```
 
-Then choose what to index: add folders to `scan_drives` in `PrivacySettings` in [backend/app/core/config.py](backend/app/core/config.py). It is empty by default, so a fresh install indexes nothing. If Tesseract is installed elsewhere, change `tesseract_path` there too.
+Then start the desktop app (see [Running](#running)) and choose what to index under sidebar → Indexed folders. Nothing is indexed until you do. If Tesseract is installed elsewhere, change `tesseract_path` in [backend/app/core/config.py](backend/app/core/config.py).
 
 ### Managing Python packages
 
@@ -116,7 +123,7 @@ All settings live in [backend/app/core/config.py](backend/app/core/config.py), g
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `OLLAMA_URL` | `http://localhost:11434` | Local Ollama HTTP endpoint. |
-| `CHAT_MODEL` | `qwen3:4b` | Chat and tool-calling model. |
+| `CHAT_MODEL` | `qwen3:4b-instruct` | Chat and tool-calling model. |
 | `EMBEDDING_MODEL` | `nomic-embed-text:latest` | Embedding model used for ingestion and search. Changing it requires a full re-index. |
 | `RERANK_ENABLED` | `True` | Turns cross-encoder reranking on or off. When off, the merged retrieval order is used as is. |
 | `RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Sentence Transformers cross-encoder used for reranking. |
@@ -173,6 +180,7 @@ uv run uvicorn app.api.main:app --host 127.0.0.1 --port 8000
 
 - Health check: `GET /health`
 - Interactive API documentation: `http://127.0.0.1:8000/docs`
+- To try background jobs without indexing anything, start it with `LOCALI_DEMO_JOBS=1` (PowerShell: `$env:LOCALI_DEMO_JOBS = "1"`). This adds a `demo` job kind that counts slowly and can be cancelled.
 
 Desktop app, from `desktop/` (it also starts the API and Ollama if they are not running):
 
@@ -185,12 +193,14 @@ Other commands, from `backend/`. `uv run` uses `backend/.venv` and syncs it firs
 
 | Goal | Command |
 | --- | --- |
-| Terminal chat (`doc:` prefix searches your files) | `uv run python -m app.cli` (add `--debug` to see prompts and tool calls) |
+| Terminal chat in the General project (`doc:` prefix searches your files) | `uv run python -m app.cli` (add `--debug` to see prompts and tool calls) |
 | Index, then prune stale entries | `uv run python -m app.ai.ingestion.pipeline` |
 | Prune stale entries only | `uv run python -m app.ai.ingestion.pipeline --prune-only` |
 | Quick search | `uv run python -m app.ai.ingestion.pipeline --search "your words"` |
 | Verify the action log | `uv run python -c "from app.tools.audit_log import verify_log_integrity; print(verify_log_integrity())"` |
 | Retrieval evaluation | `uv run python -m scripts.eval_retrieval run --fixtures tests/fixtures/retrieval_eval.yaml` |
+| Timing baseline (see [docs/BASELINE.md](docs/BASELINE.md)) | `uv run python -m scripts.baseline --questions <file.yaml> --json <out.json>` |
+| Export the API contract after a route change | `uv run python -m scripts.export_openapi` (`--check` only compares) |
 
 ## API reference
 
@@ -200,9 +210,9 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | --- | --- | --- |
 | `GET` | `/health` | Returns `{ "status": "ok" }`. |
 | `GET` | `/health/checks` | Model runtime, required models, free disk space and OCR, each `ok`, `warning`, `error` or `unknown` with a fix when something is wrong. Needs the token. |
-| `POST` | `/chat` | Body `message`, `use_docs`, optional `project` and `conversation_id`; returns `response`, `sources`, `conversation_id`. |
-| `WS` | `/chat/stream` | Send `{message, use_docs?, project?, conversation_id?}`; receive `token` events, then `sources` and `done`, or an `error` event. See [docs/CHAT_EVENTS.md](docs/CHAT_EVENTS.md). |
-| `GET` | `/conversations` | Past chats, most recently active first: `id`, `title`, `started_at`, `updated_at`, `message_count`. |
+| `POST` | `/chat` | Body `message`, `project_id`, `use_docs`, optional `project` and `conversation_id`; returns `response`, `sources`, `conversation_id`. `404` if the project doesn't exist. |
+| `WS` | `/chat/stream` | Send `{message, project_id, use_docs?, project?, conversation_id?}`; receive `token` events, then `sources` and `done`, or an `error` event. A `conversation_id` from another project starts a new chat. See [docs/CHAT_EVENTS.md](docs/CHAT_EVENTS.md). |
+| `GET` | `/conversations?project_id=...` | One project's chats, most recently active first: `id`, `title`, `project_id`, `started_at`, `updated_at`, `message_count`. `404` if the project doesn't exist. |
 | `GET` | `/conversations/{id}` | One chat with its `messages` (`role`, `content`, `sources`, `status`: `complete`, `incomplete` or `streaming`); `404` if unknown. |
 | `PATCH` | `/conversations/{id}` | Renames a chat; body `{ "title": "..." }` (1–200 characters). |
 | `DELETE` | `/conversations/{id}` | Deletes a chat and its messages; `204`, or `404` if unknown. |
@@ -214,7 +224,7 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | `POST` | `/projects/{id}/folders` | Adds a folder; body `{ "path": "...", "permission": "read" }`; `201`, or `422` with the reason (missing, system/private/ignored folder, already in the project). |
 | `PATCH` | `/projects/{id}/folders/{folder_id}` | Switches a folder between `read` and `act`; body `{ "permission": "act" }`. |
 | `DELETE` | `/projects/{id}/folders/{folder_id}` | Takes a folder off the project; its files are not touched. `204`, or `404` if unknown. |
-| `POST` | `/jobs` | Starts a background job; body `{ "kind": "...", "params": {...} }`; `202`, or `422` for an unknown kind. |
+| `POST` | `/jobs` | Starts a background job; body `{ "kind": "...", "params": {...}, "project": "default" }`; `202`, `422` for an unknown kind, or `409` if that kind allows only one active job. Kinds: `ingest`, `forget_folder`, and `demo` with `LOCALI_DEMO_JOBS=1`. |
 | `GET` | `/jobs?state=...&limit=50` | Jobs newest first, optionally only some states. |
 | `GET` | `/jobs/{id}` | One job with its state, progress and result or error; `404` if unknown. |
 | `POST` | `/jobs/{id}/cancel` | Cancels a queued job at once; a running job stops at its next check. |
@@ -229,13 +239,15 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | `POST` | `/files/move` | Moves a file inside `ALLOWED_ROOT`; body `{ "src": "...", "dst": "..." }`. |
 | `POST` | `/files/organize` | Sorts a folder's files by extension; body `{ "folder": "..." }`. |
 
-Pass the returned `conversation_id` back to continue the same conversation. Both chat routes save every turn to SQLite.
+Pass the returned `conversation_id` back to continue the same conversation. Both chat routes save every turn to SQLite: the question before the model runs, and the reply afterwards, marked `incomplete` if it was cut off. Every chat belongs to a project. Chats from before projects existed were moved into a project named General, which the desktop and the CLI use until the app has a project picker.
 
 ## File-operation safety
 
 The assistant can call `list_files`, `move_file`, `create_folder`, `organize_by_extension` and `find_empty_files` when the user asks for a file operation. Tools are not offered when retrieved file contents are in the prompt, so text inside an indexed document cannot trigger a file operation.
 
 Tool paths are resolved against `ALLOWED_ROOT`. Traversal paths, absolute paths outside the root, and sibling-prefix escapes are rejected. Successful and blocked operations are recorded in `logs/actions.log` and mirrored into the SQLite `audit_log` table with their target path and outcome. The hash chain detects edits, deletions and reordering after the fact; it does not prevent a process with filesystem access from deleting the log.
+
+Projects define their own folders, and `backend/app/services/project_boundary.py` decides whether a path is inside them. It fully resolves every path first, including links, junctions and shortcuts, then refuses traversal, absolute paths elsewhere, sibling-prefix names, and links that lead outside. The checks are tested on Windows too (letter case, short names, device names). Folders added to a project already go through it. The file tools still use `ALLOWED_ROOT` until they are moved onto project folders.
 
 ## Testing
 
@@ -251,7 +263,7 @@ The integration test needs Ollama and both models, and is skipped otherwise. To 
 
 The desktop API client is generated from the backend's OpenAPI description. After changing a backend route, run `uv run python -m scripts.export_openapi` in `backend/`, then `npm run generate:api` in `desktop/`, and commit both generated files (`desktop/electron/api/openapi.json` and `schema.d.ts`). CI fails if either is out of date or the client no longer type-checks.
 
-On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`. CI runs the same checks on every push and pull request to `main`; pre-commit runs ruff and the desktop lint locally.
+On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`. CI runs the same checks on every push and pull request to `main`, plus the project boundary tests on Windows; pre-commit runs ruff and the desktop lint locally.
 
 ## Changing the database schema
 
@@ -269,6 +281,8 @@ A database migrated by a newer Locali is refused at startup rather than changed.
 ## Known limitations
 
 - Attachments, settings, workspace statistics and the context panel are hidden until the backend supports them.
+- The desktop has no project picker yet; it always works in the General project.
+- Retrieval is not yet limited to a project's folders: the chat's optional `project` field only filters sources by path text.
 - Source chips can only reveal files inside the workspace folder; indexed files elsewhere are refused.
 - Electron Builder packages only `dist/` and Electron files. It does not bundle Python, the backend, Tesseract, or Ollama models.
 - The cross-encoder may download from Hugging Face on first use unless already cached.

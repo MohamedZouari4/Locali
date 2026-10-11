@@ -1,5 +1,5 @@
 // Electron main process: starts the Python API and Ollama if they aren't already running, opens the window,
-// and forwards the renderer's IPC requests (streaming chat, conversations, background jobs, indexed folders, revealing files) to the local API.
+// and forwards the renderer's IPC requests (streaming chat, projects, conversations, background jobs, indexed folders, revealing files) to the local API.
 
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('node:path');
@@ -10,7 +10,7 @@ const { createApiClient } = require('./api/client.cjs');
 
 const API_BASE_URL = 'http://127.0.0.1:8000'; // loopback only — ADR-015
 const CHAT_STREAM_URL = 'ws://127.0.0.1:8000/chat/stream';
-const CHAT_SUBPROTOCOL = 'locali.chat.v1'; // event contract version, see docs/CHAT_EVENTS.md
+const CHAT_SUBPROTOCOL = 'locali.chat.v2'; // event contract version, see docs/CHAT_EVENTS.md
 const JOB_EVENTS_URL = 'ws://127.0.0.1:8000/jobs/events';
 const JOB_SUBPROTOCOL = 'locali.jobs.v1'; // see docs/JOB_EVENTS.md
 const TOKEN_PATH = path.join(app.getPath('userData'), 'api-token');
@@ -183,7 +183,7 @@ function closeActiveChatSocket() {
 
 ipcMain.handle(
   'api:chat:stream:start',
-  (event, { message, conversationId, useDocs }) => {
+  (event, { message, projectId, conversationId, useDocs }) => {
     const token = getAuthToken();
     console.log(`[Locali] Starting chat stream${conversationId ? ` for ${conversationId}` : ''}`);
     closeActiveChatSocket();
@@ -197,7 +197,7 @@ ipcMain.handle(
 
     ws.on('open', () => {
       console.log('[Locali] Chat stream connected');
-      ws.send(JSON.stringify({ message, conversation_id: conversationId, use_docs: useDocs }));
+      ws.send(JSON.stringify({ message, project_id: projectId, conversation_id: conversationId, use_docs: useDocs }));
     });
     let sources = [];
     ws.on('message', (raw) => {
@@ -249,7 +249,11 @@ ipcMain.handle('api:chat:stream:stop', () => {
   closeActiveChatSocket();
 });
 
-ipcMain.handle('api:conversations:list', () => api.listConversations());
+ipcMain.handle('api:projects:list', () => api.listProjects());
+
+ipcMain.handle('api:projects:create', (_event, { name }) => api.createProject(name));
+
+ipcMain.handle('api:conversations:list', (_event, { projectId }) => api.listConversations(projectId));
 
 ipcMain.handle('api:conversations:open', (_event, { id }) => api.openConversation(id));
 

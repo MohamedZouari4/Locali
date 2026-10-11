@@ -79,9 +79,37 @@ class MigrationsTestCase(unittest.TestCase):
         with self.conn:
             self.conn.execute("INSERT INTO conversations (id, title) VALUES ('c1', 'kept')")
 
-        migrations.migrate(self.conn)
+        migrations.migrate(self.conn, migrations.MIGRATIONS[:2])
 
         self.assertEqual(self.conn.execute("SELECT id, title, project_id FROM conversations").fetchall(), [("c1", "kept", None)])
+
+    def test_chats_without_a_project_move_into_general(self):
+        migrations.migrate(self.conn, migrations.MIGRATIONS[:2])
+        with self.conn:
+            self.conn.execute("INSERT INTO conversations (id, title) VALUES ('c1', 'kept')")
+            self.conn.execute("INSERT INTO messages (conversation_id, role, content) VALUES ('c1', 'user', 'hello')")
+
+        migrations.migrate(self.conn)
+
+        general_id = self.conn.execute("SELECT id FROM projects WHERE name = 'General'").fetchone()[0]
+        self.assertEqual(self.conn.execute("SELECT id, title, project_id FROM conversations").fetchall(), [("c1", "kept", general_id)])
+        self.assertEqual(self.conn.execute("SELECT content FROM messages").fetchall(), [("hello",)])
+
+    def test_an_existing_general_project_is_reused(self):
+        migrations.migrate(self.conn, migrations.MIGRATIONS[:2])
+        with self.conn:
+            self.conn.execute("INSERT INTO projects (id, name) VALUES ('p1', 'general')")
+            self.conn.execute("INSERT INTO conversations (id, title) VALUES ('c1', 'kept')")
+
+        migrations.migrate(self.conn)
+
+        self.assertEqual(self.conn.execute("SELECT id FROM projects").fetchall(), [("p1",)])
+        self.assertEqual(self.conn.execute("SELECT project_id FROM conversations").fetchall(), [("p1",)])
+
+    def test_general_is_not_created_without_old_chats(self):
+        migrations.migrate(self.conn)
+
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0], 0)
 
     def test_running_again_applies_nothing(self):
         migrations.migrate(self.conn)

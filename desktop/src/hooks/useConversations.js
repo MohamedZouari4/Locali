@@ -1,21 +1,22 @@
-// Hook that loads the saved conversations for the sidebar and renames or deletes them through the local API.
+// Hook that loads the current project's saved conversations for the sidebar and renames or deletes them
+// through the local API.
 
 import { useCallback, useState } from 'react'
 
-export function useConversations() {
+export function useConversations(projectId) {
   const [conversations, setConversations] = useState([])
   const [error, setError] = useState(null)
 
   const refresh = useCallback(async () => {
     const api = window.localiAPI?.conversations
-    if (!api) return
+    if (!api || !projectId) return
     try {
-      setConversations(await api.list())
+      setConversations(await api.list(projectId))
       setError(null)
     } catch {
       setError('Could not load your conversations.')
     }
-  }, [])
+  }, [projectId])
 
   const rename = useCallback(
     async (id, title) => {

@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 # Semantic version of the contract. Only the major number is in the subprotocol, because minor
 # versions only add things that older clients can ignore.
-CHAT_EVENTS_VERSION = "1.0.0"
+CHAT_EVENTS_VERSION = "2.0.0"
 CHAT_SUBPROTOCOL = f"locali.chat.v{CHAT_EVENTS_VERSION.split('.')[0]}"
 
 
@@ -18,6 +18,7 @@ class ChatStreamRequest(BaseModel):
     """The one message the client sends after connecting."""
 
     message: str
+    project_id: str = Field(description="The project the chat belongs to. A conversation_id from another project starts a new chat.")
     conversation_id: str | None = None
     use_docs: bool | None = Field(None, description="Defaults to true, except for greetings.")
     project: str | None = None

@@ -18,19 +18,25 @@ and `ollama serve`, if they are not already running.
 | `npm run dev` | Vite and Electron together |
 | `npm run dev:vite` | Vite only |
 | `npm run dev:electron` | Electron, once Vite is up |
-| `npm run lint` | Oxlint + Stylelint |
+| `npm run lint` | Oxlint + Stylelint (Stylelint forbids raw colors; use the tokens) |
+| `npm run typecheck` | Type-checks the Electron API client against `schema.d.ts` |
+| `npm run generate:api` | Regenerates `electron/api/schema.d.ts` from `openapi.json`; `dev` and `build` run it first |
 | `npm run build` | Build the renderer into `dist/` |
 | `npm run build:electron` | Build and package with Electron Builder (does not bundle Python, Ollama or Tesseract) |
+
+After a backend route changes, run `uv run python -m scripts.export_openapi` in `backend/`, then
+`npm run generate:api` here, and commit both `electron/api/openapi.json` and `schema.d.ts`.
 
 ## Layout
 
 | Path | Contents |
 | --- | --- |
-| `electron/main.cjs` | Starts local services, opens the window, whitelisted IPC handlers |
+| `electron/main.cjs` | Starts local services, opens the window, whitelisted IPC handlers, the chat and job WebSockets |
 | `electron/preload.cjs` | The `window.localiAPI` bridge |
-| `src/components/Chat/` | Chat screen and message bubbles |
+| `electron/api/` | `client.cjs`, the typed API client, and the generated `openapi.json` and `schema.d.ts` |
+| `src/components/Chat/` | Chat screen, conversation list, message bubbles, Indexed folders dialog, Background tasks panel, health banner |
 | `src/components/Intro/` | Startup intro (animation, synthesized sound) |
-| `src/hooks/` | `useChatStream` (streaming state), `useTheme` (light/dark) |
+| `src/hooks/` | `useChatStream` (streaming state), `useConversations` (sidebar list), `useCurrentProject` (the General project until there is a picker), `useFolders`, `useJobs`, `useHealth`, `useServicesReady`, `useTheme` (light/dark) |
 | `src/styles/tokens/` | Design tokens: primitives, semantic roles, spacing |
 
 ## Startup intro
@@ -64,12 +70,18 @@ files. Both are covered by the repository's MIT licence.
 
 | Method | Backend call |
 | --- | --- |
-| `servicesReady()` | None; resolves once the main process has started the API and Ollama |
-| `health()` | `GET /health` and Ollama `/api/tags` |
-| `chat(message, conversationId)` | `POST /chat` |
-| `chatStream.start(message, conversationId, useDocs)` | WebSocket `/chat/stream` |
-| `search(query)` | `GET /search` |
-| `ingest(fullReset)` | `POST /ingest` (runs in the background) |
-| `ingestStatus()` | `GET /ingest/status` |
-| `files.list(path)` | `GET /files` |
-| `files.reveal(relativePath)` | Opens the file in Explorer; workspace paths only |
+| `servicesReady()` | None; resolves once the main process has started (or given up waiting for) the API and Ollama |
+| `health()` | `GET /health/checks`; a "service not running" report if the API can't be reached |
+| `projects.list()` / `projects.create(name)` | `GET /projects` / `POST /projects` |
+| `conversations.list(projectId)` | `GET /conversations?project_id=...` |
+| `conversations.open(id)` / `rename(id, title)` / `remove(id)` | `GET` / `PATCH` / `DELETE /conversations/{id}` |
+| `chatStream.start(message, projectId, conversationId, useDocs)` | WebSocket `/chat/stream` (`locali.chat.v2`); answers arrive through `onChunk`, `onFinal`, `onError` and `onDone` |
+| `chatStream.stop()` | Closes the socket; the backend keeps what arrived, marked incomplete |
+| `jobs.listActive()` / `jobs.cancel(id)` | `GET /jobs?state=queued&state=running` / `POST /jobs/{id}/cancel` |
+| `jobs.onEvent(callback)` / `jobs.onSync(callback)` | Events from WebSocket `/jobs/events`; `onSync` fires on (re)connect so the list can be reloaded |
+| `folders.list()` / `folders.remove(id)` | `GET /folders` / `DELETE /folders/{id}` |
+| `folders.choose()` | Opens the native folder picker in the main process, then `POST /folders`; the page never sends a path |
+| `indexing.start()` | `POST /ingest` (runs as a background job) |
+| `files.reveal(relativePath)` | None; opens the file in Explorer, workspace (`AI-Workspace/`) paths only |
+
+See [docs/BRIDGE_AUDIT.md](../docs/BRIDGE_AUDIT.md) for how each method was checked.

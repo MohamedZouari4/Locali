@@ -14,6 +14,7 @@ user_version needs no extra dependency or tracking table.
 """
 
 import sqlite3
+import uuid
 
 
 class DatabaseTooNewError(RuntimeError):
@@ -120,7 +121,19 @@ def _002_projects(conn):
     conn.execute("CREATE INDEX idx_conversations_project ON conversations(project_id)")
 
 
-MIGRATIONS = [_001_initial, _002_projects]
+def _003_general_project(conn):
+    # Every chat now belongs to a project, so chats from before projects move into one named General.
+    # It is only created when such chats exist, and a project already named General (any case) is reused.
+    if conn.execute("SELECT 1 FROM conversations WHERE project_id IS NULL").fetchone() is None:
+        return
+    conn.execute(
+        "INSERT INTO projects (id, name) SELECT ?, 'General' WHERE NOT EXISTS (SELECT 1 FROM projects WHERE name = 'General')",
+        (str(uuid.uuid4()),),
+    )
+    conn.execute("UPDATE conversations SET project_id = (SELECT id FROM projects WHERE name = 'General') WHERE project_id IS NULL")
+
+
+MIGRATIONS = [_001_initial, _002_projects, _003_general_project]
 
 
 def schema_version(conn):

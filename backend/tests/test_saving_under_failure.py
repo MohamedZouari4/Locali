@@ -41,6 +41,7 @@ class SavingUnderFailureTests(unittest.TestCase):
         ]
         for p in self._patches:
             p.start()
+        self.project_id = database.create_project("Thesis")["id"]
 
     def tearDown(self):
         for p in self._patches:
@@ -51,7 +52,7 @@ class SavingUnderFailureTests(unittest.TestCase):
         # Asks one question over /chat/stream and returns the event types the client received.
         with patch.object(orchestrator.requests, "post", **ollama):
             with TestClient(app).websocket_connect("/chat/stream", headers={"authorization": f"Bearer {API_TOKEN}"}) as ws:
-                ws.send_json({"message": "summarize my notes", "use_docs": False})
+                ws.send_json({"message": "summarize my notes", "project_id": self.project_id, "use_docs": False})
                 events = [ws.receive_json()["type"]]
                 if leave_after_first_token:
                     ws.close()  # the user closed the app or clicked Stop
@@ -62,7 +63,7 @@ class SavingUnderFailureTests(unittest.TestCase):
         return events
 
     def _assert_saved_incomplete(self, reply_text):
-        conversations = database.list_conversations()
+        conversations = database.list_conversations(self.project_id)
         self.assertEqual(len(conversations), 1)
         self.assertEqual(conversations[0]["title"], "summarize my notes")
 

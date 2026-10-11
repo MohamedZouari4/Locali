@@ -1,14 +1,15 @@
 """Chat endpoints: POST /chat returns a complete answer. The /chat/stream WebSocket checks the token
 itself, then streams the answer as the events in app/chat_events.py: tokens, sources, then done.
 
-Both continue the conversation named by `conversation_id`, or start a new one and return its id.
+Both continue the conversation named by `conversation_id` in the project `project_id`, or start a new
+one there and return its id.
 """
 
 import asyncio
 import contextlib
 import re
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from starlette.concurrency import iterate_in_threadpool
 
@@ -26,6 +27,7 @@ GREETING_RE = re.compile(r"^(hi|hello|hey|good morning|good afternoon|good eveni
 
 class ChatRequest(BaseModel):
     message: str
+    project_id: str
     use_docs: bool = False
     project: str | None = None
     conversation_id: str | None = None
@@ -39,12 +41,17 @@ class ChatResponse(BaseModel):
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
-    return chat_service.get_answer(
-        req.message,
-        use_docs=req.use_docs,
-        project=req.project,
-        conversation_id=req.conversation_id,
-    )
+    """Answers in the project `project_id`; 404 if it doesn't exist."""
+    try:
+        return chat_service.get_answer(
+            req.message,
+            project_id=req.project_id,
+            use_docs=req.use_docs,
+            project=req.project,
+            conversation_id=req.conversation_id,
+        )
+    except chat_service.ProjectNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
 
 
 @router.websocket("/chat/stream")
@@ -70,7 +77,9 @@ async def chat_stream(websocket: WebSocket):
         is_greeting = bool(GREETING_RE.match(request.message.strip().lower()))
         use_docs = request.use_docs if request.use_docs is not None else not is_greeting
         # Save the user message (and an empty reply marked streaming) before the model runs.
-        conversation_id, reply_id = await asyncio.to_thread(database.begin_turn, request.conversation_id, request.message)
+        conversation_id, reply_id = await asyncio.to_thread(
+            chat_service.begin_turn, request.project_id, request.conversation_id, request.message
+        )
         events = ask_stream(request.message, use_docs=use_docs, project=request.project)
         # Each next() on the generator runs in a worker thread so the server isn't blocked.
         async for event in iterate_in_threadpool(events):

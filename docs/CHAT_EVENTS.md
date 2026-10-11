@@ -1,4 +1,4 @@
-# Chat event contract (v1.0.0)
+# Chat event contract (v2.0.0)
 
 The `/chat/stream` WebSocket streams one answer per connection. This file and the schemas in
 `/openapi.json` (`components.schemas`, plus `x-websockets` for the endpoint) are the whole contract.
@@ -8,8 +8,8 @@ The models live in [backend/app/chat_events.py](../backend/app/chat_events.py).
 
 - URL: `ws://127.0.0.1:8000/chat/stream`
 - Header: `Authorization: Bearer <token>` (from `.auth_token`)
-- Subprotocol: `locali.chat.v1`. The server closes with code `1008` if the client asks only for
-  versions it doesn't support. A client that sends no subprotocol gets v1.
+- Subprotocol: `locali.chat.v2`. The server closes with code `1008` if the client asks only for
+  versions it doesn't support. A client that sends no subprotocol gets the current version (v2).
 
 ## Request
 
@@ -18,6 +18,7 @@ After connecting, send one JSON message:
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `message` | string | yes | The user's question. |
+| `project_id` | string | yes | The project the chat belongs to. A `conversation_id` from another project starts a new conversation. |
 | `conversation_id` | string \| null | no | From the previous `done` event. Omit it to start a new conversation. |
 | `use_docs` | boolean \| null | no | Search indexed documents. Defaults to true, except for greetings. |
 | `project` | string \| null | no | Limit document search to one project. |

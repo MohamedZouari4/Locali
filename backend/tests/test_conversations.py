@@ -1,4 +1,4 @@
-"""Tests for the conversation history routes: list, open, rename and delete."""
+"""Tests for the conversation history routes: list, open, rename and delete, each scoped to a project (P1-E1-T6)."""
 
 import os
 import shutil
@@ -23,23 +23,27 @@ class ConversationRoutesTests(unittest.TestCase):
         for p in self._patches:
             p.start()
         self.client = TestClient(app, headers={"Authorization": f"Bearer {API_TOKEN}"})
+        self.project_id = database.create_project("Thesis")["id"]
 
     def tearDown(self):
         for p in self._patches:
             p.stop()
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-    def _chat(self, question, answer, conversation_id=None, sources=None, complete=True):
-        conversation_id, reply_id = database.begin_turn(conversation_id, question)
+    def _chat(self, question, answer, conversation_id=None, sources=None, complete=True, project_id=None):
+        conversation_id, reply_id = database.begin_turn(conversation_id, question, project_id or self.project_id)
         database.finish_turn(reply_id, answer, sources, complete=complete)
         return conversation_id
+
+    def _list(self, project_id=None):
+        return self.client.get("/conversations", params={"project_id": project_id or self.project_id}).json()
 
     def test_list_shows_the_most_recently_active_conversation_first(self):
         first = self._chat("first question", "a")
         second = self._chat("second question", "b")
         self._chat("follow-up", "c", conversation_id=first)
 
-        listed = self.client.get("/conversations").json()
+        listed = self._list()
 
         self.assertEqual([c["id"] for c in listed], [first, second])
         self.assertEqual(listed[0]["title"], "first question")
@@ -63,7 +67,7 @@ class ConversationRoutesTests(unittest.TestCase):
 
         self.assertEqual(renamed.status_code, 200)
         self.assertEqual(renamed.json()["title"], "Greetings")
-        self.assertEqual(self.client.get("/conversations").json()[0]["title"], "Greetings")
+        self.assertEqual(self._list()[0]["title"], "Greetings")
 
     def test_rename_rejects_an_empty_title(self):
         conv_id = self._chat("hello", "hi")
@@ -76,9 +80,22 @@ class ConversationRoutesTests(unittest.TestCase):
 
         self.assertEqual(self.client.delete(f"/conversations/{conv_id}").status_code, 204)
 
-        self.assertEqual([c["id"] for c in self.client.get("/conversations").json()], [kept])
+        self.assertEqual([c["id"] for c in self._list()], [kept])
         self.assertEqual(database.get_messages(conv_id), [])
         self.assertEqual(len(database.get_messages(kept)), 2)
+
+    def test_chats_from_one_project_never_appear_in_another(self):
+        other_id = database.create_project("Taxes")["id"]
+        thesis_chat = self._chat("thesis question", "a")
+        taxes_chat = self._chat("taxes question", "b", project_id=other_id)
+
+        self.assertEqual([c["id"] for c in self._list()], [thesis_chat])
+        self.assertEqual([c["id"] for c in self._list(other_id)], [taxes_chat])
+        self.assertEqual(self._list()[0]["project_id"], self.project_id)
+
+    def test_listing_needs_an_existing_project(self):
+        self.assertEqual(self.client.get("/conversations").status_code, 422)
+        self.assertEqual(self.client.get("/conversations", params={"project_id": "missing"}).status_code, 404)
 
     def test_unknown_conversation_returns_404(self):
         for response in (

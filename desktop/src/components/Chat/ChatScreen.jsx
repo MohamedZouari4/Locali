@@ -5,6 +5,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useChatStream } from '../../hooks/useChatStream'
 import { useConversations } from '../../hooks/useConversations'
+import { useCurrentProject } from '../../hooks/useCurrentProject'
 import { useFolders } from '../../hooks/useFolders'
 import { useHealth } from '../../hooks/useHealth'
 import { useJobs } from '../../hooks/useJobs'
@@ -28,8 +29,9 @@ const suggestions = [
 const narrowScreen = '(max-width: 720px)'
 
 export function ChatScreen() {
-  const { messages, conversationId, sendMessage, retry, stop, loadConversation, newChat } = useChatStream()
-  const { conversations, error: conversationsError, refresh, rename, remove } = useConversations()
+  const { projectId, error: projectError } = useCurrentProject()
+  const { messages, conversationId, sendMessage, retry, stop, loadConversation, newChat } = useChatStream(projectId)
+  const { conversations, error: conversationsError, refresh, rename, remove } = useConversations(projectId)
   const { jobs, cancel: cancelJob } = useJobs()
   const { folders, message: folderMessage, addFolder, removeFolder, indexNow, clearMessage } = useFolders()
   const [foldersOpen, setFoldersOpen] = useState(false)
@@ -129,7 +131,7 @@ export function ChatScreen() {
           </button>
 
           <nav className="sidebar__list">
-            <ConversationList conversations={conversations} activeId={conversationId} error={conversationsError} onOpen={openConversation} onRename={rename} onDelete={deleteConversation} />
+            <ConversationList conversations={conversations} activeId={conversationId} error={projectError ?? conversationsError} onOpen={openConversation} onRename={rename} onDelete={deleteConversation} />
           </nav>
 
           <JobsPanel jobs={jobs} onCancel={cancelJob} />

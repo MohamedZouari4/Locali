@@ -10,7 +10,7 @@ questions with a local Ollama model. **Nothing leaves the machine**: never add a
 or a dependency that phones home.
 
 - `backend/`: Python 3.12, FastAPI on `127.0.0.1:8000`, SQLite (`assistant.db`), ChromaDB, Ollama
-  (`qwen3:4b` chat, `nomic-embed-text` embeddings), a cross-encoder reranker on CPU.
+  (`qwen3:4b-instruct` chat, `nomic-embed-text` embeddings), a cross-encoder reranker on CPU.
 - `desktop/`: Electron + React (Vite). The renderer only talks to the preload bridge
   (`window.localiAPI`); `electron/main.cjs` makes every API call and holds the token.
 - `docs/`: tracked design docs (chat/job event contracts, bridge audit, baseline). `docs/private/` is gitignored.

@@ -39,7 +39,8 @@ function createApiClient(baseUrl, getToken) {
   }
 
   return {
-    listConversations: () => unwrap(client.GET('/conversations')),
+    /** @param {string} projectId */
+    listConversations: (projectId) => unwrap(client.GET('/conversations', { params: { query: { project_id: projectId } } })),
 
     /** @param {string} id */
     openConversation: (id) =>
@@ -52,6 +53,11 @@ function createApiClient(baseUrl, getToken) {
     /** @param {string} id */
     deleteConversation: (id) =>
       unwrap(client.DELETE('/conversations/{conversation_id}', { params: { path: { conversation_id: id } } })),
+
+    listProjects: () => unwrap(client.GET('/projects')),
+
+    /** @param {string} name */
+    createProject: (name) => unwrap(client.POST('/projects', { body: { name, instructions: '' } })),
 
     // Queued and running jobs, newest first; live changes arrive on the /jobs/events socket.
     listActiveJobs: () => unwrap(client.GET('/jobs', { params: { query: { state: ['queued', 'running'] } } })),

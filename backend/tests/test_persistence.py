@@ -36,6 +36,7 @@ class PersistenceTestCase(unittest.TestCase):
         ]
         for p in self._patches:
             p.start()
+        self._project_id = None
 
     def tearDown(self):
         # Stop the patches and remove the temporary test directory.
@@ -44,6 +45,13 @@ class PersistenceTestCase(unittest.TestCase):
         import shutil
 
         shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    @property
+    def project_id(self):
+        # Created on first use, so tests that build an old database start from an empty file.
+        if self._project_id is None:
+            self._project_id = database.create_project("Thesis")["id"]
+        return self._project_id
 
     def _saved(self, conv_id):
         return [(m["role"], m["content"], m["status"]) for m in database.get_messages(conv_id)]
@@ -67,7 +75,7 @@ class PersistenceTestCase(unittest.TestCase):
         conv_id, _ = database.begin_turn("does-not-exist", "hello")
 
         self.assertNotEqual(conv_id, "does-not-exist")
-        self.assertEqual(database.list_conversations()[0]["title"], "hello")
+        self.assertEqual(database.get_conversation(conv_id)["title"], "hello")
 
     def test_replies_left_streaming_by_a_crash_are_marked_incomplete_on_startup(self):
         conv_id, _ = database.begin_turn(None, "hello")
@@ -126,11 +134,28 @@ class PersistenceTestCase(unittest.TestCase):
     def test_chat_service_starts_and_continues_a_conversation(self):
         reply = self._chat_reply({"role": "assistant", "content": "hi there"})
         with patch.object(orchestrator.requests, "post", return_value=reply):
-            first = chat_service.get_answer("hello")
-            second = chat_service.get_answer("again", conversation_id=first["conversation_id"])
+            first = chat_service.get_answer("hello", project_id=self.project_id)
+            second = chat_service.get_answer("again", project_id=self.project_id, conversation_id=first["conversation_id"])
 
         self.assertEqual(first["conversation_id"], second["conversation_id"])
         self.assertEqual(len(database.get_messages(first["conversation_id"])), 4)
+
+    def test_a_chat_from_another_project_is_never_continued(self):
+        other_id = database.create_project("Taxes")["id"]
+        reply = self._chat_reply({"role": "assistant", "content": "hi there"})
+        with patch.object(orchestrator.requests, "post", return_value=reply):
+            first = chat_service.get_answer("hello", project_id=self.project_id)
+            second = chat_service.get_answer("again", project_id=other_id, conversation_id=first["conversation_id"])
+
+        self.assertNotEqual(first["conversation_id"], second["conversation_id"])
+        self.assertEqual(len(database.get_messages(first["conversation_id"])), 2)
+        self.assertEqual(database.get_conversation(second["conversation_id"])["project_id"], other_id)
+
+    def test_a_chat_in_a_missing_project_is_refused_and_not_saved(self):
+        with self.assertRaises(chat_service.ProjectNotFound):
+            chat_service.get_answer("hello", project_id="missing")
+
+        self.assertEqual(database.list_conversations(self.project_id), [])
 
     def _chat_reply(self, message):
         reply = Mock()
@@ -140,7 +165,7 @@ class PersistenceTestCase(unittest.TestCase):
     def test_chat_service_saves_a_normal_answer(self):
         reply = self._chat_reply({"role": "assistant", "content": "hi there"})
         with patch.object(orchestrator.requests, "post", return_value=reply):
-            result = chat_service.get_answer("hello")
+            result = chat_service.get_answer("hello", project_id=self.project_id)
 
         self.assertEqual(result["response"], "hi there")
         self.assertEqual(self._saved(result["conversation_id"]), [("user", "hello", "complete"), ("assistant", "hi there", "complete")])
@@ -149,7 +174,7 @@ class PersistenceTestCase(unittest.TestCase):
         tool_call = {"function": {"name": "no_such_tool", "arguments": {}}}
         reply = self._chat_reply({"role": "assistant", "content": "", "tool_calls": [tool_call]})
         with patch.object(orchestrator.requests, "post", return_value=reply):
-            result = chat_service.get_answer("do something")
+            result = chat_service.get_answer("do something", project_id=self.project_id)
 
         self.assertIn("tool-call limit", result["response"])
         self.assertTrue(result["used_tools"])
@@ -160,9 +185,9 @@ class PersistenceTestCase(unittest.TestCase):
             patch.object(orchestrator.requests, "post", side_effect=ConnectionError("Ollama is down")),
             self.assertRaises(ConnectionError),
         ):
-            chat_service.get_answer("hello")
+            chat_service.get_answer("hello", project_id=self.project_id)
 
-        conv_id = database.list_conversations()[0]["id"]
+        conv_id = database.list_conversations(self.project_id)[0]["id"]
         self.assertEqual(self._saved(conv_id), [("user", "hello", "complete"), ("assistant", "", "incomplete")])
 
     def _stream_turn(self, lines):
@@ -172,11 +197,11 @@ class PersistenceTestCase(unittest.TestCase):
         reply.iter_lines.return_value = lines
         with patch.object(orchestrator.requests, "post", return_value=reply):
             with TestClient(app).websocket_connect("/chat/stream", headers={"authorization": f"Bearer {API_TOKEN}"}) as ws:
-                ws.send_json({"message": "hello", "use_docs": False})
+                ws.send_json({"message": "hello", "project_id": self.project_id, "use_docs": False})
                 events = [ws.receive_json()]
                 while events[-1]["type"] not in ("done", "error"):
                     events.append(ws.receive_json())
-        return events, database.list_conversations()[0]["id"]
+        return events, database.list_conversations(self.project_id)[0]["id"]
 
     def test_streamed_answer_is_stored_complete(self):
         events, conv_id = self._stream_turn(

@@ -54,6 +54,7 @@
           "Chat"
         ],
         "summary": "Chat",
+        "description": "Answers in the project `project_id`; 404 if it doesn't exist.",
         "operationId": "chat_chat_post",
         "parameters": [
           {
@@ -106,8 +107,20 @@
           "Conversations"
         ],
         "summary": "List Conversations",
+        "description": "404 if the project doesn't exist.",
         "operationId": "list_conversations_conversations_get",
         "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Only this project's chats are listed.",
+              "title": "Project Id"
+            },
+            "description": "Only this project's chats are listed."
+          },
           {
             "name": "authorization",
             "in": "header",
@@ -1511,6 +1524,10 @@
             "type": "string",
             "title": "Message"
           },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
           "use_docs": {
             "type": "boolean",
             "title": "Use Docs",
@@ -1541,7 +1558,8 @@
         },
         "type": "object",
         "required": [
-          "message"
+          "message",
+          "project_id"
         ],
         "title": "ChatRequest"
       },
@@ -1588,6 +1606,17 @@
             ],
             "title": "Title"
           },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
           "started_at": {
             "type": "string",
             "title": "Started At"
@@ -1613,6 +1642,7 @@
         "required": [
           "id",
           "title",
+          "project_id",
           "started_at",
           "updated_at",
           "message_count",
@@ -1637,6 +1667,17 @@
             ],
             "title": "Title"
           },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
           "started_at": {
             "type": "string",
             "title": "Started At"
@@ -1655,6 +1696,7 @@
         "required": [
           "id",
           "title",
+          "project_id",
           "started_at",
           "updated_at",
           "message_count"
@@ -2487,6 +2529,11 @@
             "title": "Message",
             "type": "string"
           },
+          "project_id": {
+            "description": "The project the chat belongs to. A conversation_id from another project starts a new chat.",
+            "title": "Project Id",
+            "type": "string"
+          },
           "conversation_id": {
             "anyOf": [
               {
@@ -2526,7 +2573,8 @@
           }
         },
         "required": [
-          "message"
+          "message",
+          "project_id"
         ],
         "title": "ChatStreamRequest",
         "type": "object"
@@ -2555,8 +2603,8 @@
   },
   "x-websockets": {
     "/chat/stream": {
-      "subprotocol": "locali.chat.v1",
-      "version": "1.0.0",
+      "subprotocol": "locali.chat.v2",
+      "version": "2.0.0",
       "request": {
         "$ref": "#/components/schemas/ChatStreamRequest"
       },

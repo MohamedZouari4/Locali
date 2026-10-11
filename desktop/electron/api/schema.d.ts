@@ -30,7 +30,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Chat */
+        /**
+         * Chat
+         * @description Answers in the project `project_id`; 404 if it doesn't exist.
+         */
         post: operations["chat_chat_post"];
         delete?: never;
         options?: never;
@@ -45,7 +48,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Conversations */
+        /**
+         * List Conversations
+         * @description 404 if the project doesn't exist.
+         */
         get: operations["list_conversations_conversations_get"];
         put?: never;
         post?: never;
@@ -417,6 +423,8 @@ export interface components {
         ChatRequest: {
             /** Message */
             message: string;
+            /** Project Id */
+            project_id: string;
             /**
              * Use Docs
              * @default false
@@ -442,6 +450,8 @@ export interface components {
             id: string;
             /** Title */
             title: string | null;
+            /** Project Id */
+            project_id: string | null;
             /** Started At */
             started_at: string;
             /**
@@ -460,6 +470,8 @@ export interface components {
             id: string;
             /** Title */
             title: string | null;
+            /** Project Id */
+            project_id: string | null;
             /** Started At */
             started_at: string;
             /**
@@ -824,6 +836,11 @@ export interface components {
             /** Message */
             message: string;
             /**
+             * Project Id
+             * @description The project the chat belongs to. A conversation_id from another project starts a new chat.
+             */
+            project_id: string;
+            /**
              * Conversation Id
              * @default null
              */
@@ -930,7 +947,10 @@ export interface operations {
     };
     list_conversations_conversations_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Only this project's chats are listed. */
+                project_id: string;
+            };
             header?: {
                 authorization?: string;
             };

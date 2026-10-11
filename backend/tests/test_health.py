@@ -146,6 +146,7 @@ class FriendlyErrorsInUseTests(unittest.TestCase):
         ]
         for p in self._patches:
             p.start()
+        self.project_id = database.create_project("Thesis")["id"]
 
     def tearDown(self):
         for p in self._patches:
@@ -158,7 +159,7 @@ class FriendlyErrorsInUseTests(unittest.TestCase):
             with client.websocket_connect(
                 "/chat/stream", headers={"authorization": f"Bearer {API_TOKEN}"}, subprotocols=[CHAT_SUBPROTOCOL]
             ) as ws:
-                ws.send_json({"message": "hello", "use_docs": False})
+                ws.send_json({"message": "hello", "project_id": self.project_id, "use_docs": False})
                 event = ws.receive_json()
         self.assertEqual(event["type"], "error")
         return event["text"]

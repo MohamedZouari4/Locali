@@ -52,11 +52,15 @@ def _transaction():
 def begin_turn(conversation_id, user_text, project_id=None):
     """Stores the user message and an empty assistant reply marked streaming, in one transaction.
 
-    Starts a new conversation, titled after the message, when `conversation_id` is missing or
-    unknown. Returns (conversation_id, assistant_message_id).
+    Continues the conversation only if it exists in `project_id`. Otherwise it starts a new one in that
+    project, titled after the message, so a chat from another project is never added to.
+    Returns (conversation_id, assistant_message_id).
     """
     with _transaction() as conn:
-        known = conversation_id and conn.execute("SELECT 1 FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+        known = (
+            conversation_id
+            and conn.execute("SELECT 1 FROM conversations WHERE id = ? AND project_id IS ?", (conversation_id, project_id)).fetchone()
+        )
         if not known:
             conversation_id = str(uuid.uuid4())
             conn.execute(
@@ -106,9 +110,12 @@ _CONVERSATION_SUMMARY = """
 """
 
 
-def list_conversations():
+def list_conversations(project_id):
+    """The project's conversations, most recently active first."""
     conn = get_connection()
-    cur = conn.execute(_CONVERSATION_SUMMARY + " GROUP BY c.id ORDER BY updated_at DESC, MAX(m.id) DESC").fetchall()
+    cur = conn.execute(
+        _CONVERSATION_SUMMARY + " WHERE c.project_id = ? GROUP BY c.id ORDER BY updated_at DESC, MAX(m.id) DESC", (project_id,)
+    ).fetchall()
     conn.close()
     return [dict(row) for row in cur]
 

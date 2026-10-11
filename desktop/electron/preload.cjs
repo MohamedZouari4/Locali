@@ -8,8 +8,13 @@ contextBridge.exposeInMainWorld('localiAPI', {
 
   health: () => ipcRenderer.invoke('api:health'),
 
+  projects: {
+    list: () => ipcRenderer.invoke('api:projects:list'),
+    create: (name) => ipcRenderer.invoke('api:projects:create', { name }),
+  },
+
   conversations: {
-    list: () => ipcRenderer.invoke('api:conversations:list'),
+    list: (projectId) => ipcRenderer.invoke('api:conversations:list', { projectId }),
     open: (id) => ipcRenderer.invoke('api:conversations:open', { id }),
     rename: (id, title) => ipcRenderer.invoke('api:conversations:rename', { id, title }),
     remove: (id) => ipcRenderer.invoke('api:conversations:delete', { id }),
@@ -48,8 +53,8 @@ contextBridge.exposeInMainWorld('localiAPI', {
   },
 
   chatStream: {
-    start: (message, conversationId, useDocs) =>
-      ipcRenderer.invoke('api:chat:stream:start', { message, conversationId, useDocs }),
+    start: (message, projectId, conversationId, useDocs) =>
+      ipcRenderer.invoke('api:chat:stream:start', { message, projectId, conversationId, useDocs }),
     stop: () => ipcRenderer.invoke('api:chat:stream:stop'),
     onChunk: (callback) => {
       const listener = (_event, chunk) => callback(chunk);
