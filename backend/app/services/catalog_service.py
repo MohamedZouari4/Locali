@@ -5,6 +5,7 @@ A scan reads every file first and then saves all changes in one transaction, so 
 scan leaves the previous catalog as it was. Jobs run per project (the job's project is the project id),
 so two scans of one project never run at once. The file watcher updates the catalog between scans
 (apply_changes); a lock keeps it and a scan from saving at the same time. The catalog is deleted with its project.
+After a full scan, cached text that no catalog file was last read from is pruned (text_cache_service).
 
 Importing this module registers the `catalog` job kind; app/api/main.py imports it through the routers.
 """
@@ -40,6 +41,7 @@ def catalog_project(project, report=None):
         scan = scanner.scan(rules, report)
         updates, inserts, delete_ids, renamed = scanner.match(records, scan)
         database.save_catalog_scan(project["id"], updates, inserts, delete_ids, scan.skipped)
+        database.prune_text_cache()
     return {
         "files": len(updates) + len(inserts),
         "skipped": scan.skipped,

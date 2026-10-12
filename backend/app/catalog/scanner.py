@@ -14,6 +14,10 @@ A file is recognised, in this order, by:
 3. its content hash, only on file systems without identifiers (st_ino is 0, as on some network
    drives), so a renamed file is still found there.
 
+On Linux and macOS a deleted file's inode is often given to the next file created. If one file is deleted
+and another created between two scans, the new file can take over the old one's record, as if renamed.
+Windows doesn't hand an old file ID to a new file this way.
+
 The walk follows the ingestion ignore rules (system, privacy and ignored folders, sensitive files) and
 never follows symbolic links or junctions, so it can't leave the project's folders. Files with skipped
 extensions are still listed: the catalog records that a file exists, not what it contains.

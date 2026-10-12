@@ -1,6 +1,6 @@
 """SQLite persistence (assistant.db): conversations, their messages, an audit_log table that
-mirrors file-tool actions, the background job queue run by app/jobs/worker.py, projects, and each
-project's file catalog.
+mirrors file-tool actions, the background job queue run by app/jobs/worker.py, projects, each
+project's file catalog, and the text cache all projects share.
 """
 
 import contextlib
@@ -362,7 +362,10 @@ def delete_project(project_id):
         conn.execute("DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE project_id = ?)", (project_id,))
         conn.execute("DELETE FROM conversations WHERE project_id = ?", (project_id,))
         # project_folders and catalog_files rows go with it (ON DELETE CASCADE).
-        return conn.execute("DELETE FROM projects WHERE id = ?", (project_id,)).rowcount > 0
+        deleted = conn.execute("DELETE FROM projects WHERE id = ?", (project_id,)).rowcount > 0
+        # Text only this project's files used goes too, so a deleted project leaves no extracted text behind.
+        conn.execute(_PRUNE_TEXT_CACHE)
+        return deleted
 
 
 def add_project_folder(project_id, path, permission="read"):
@@ -445,6 +448,61 @@ def list_all_project_folders():
     for row in rows:
         folders.setdefault(row["project_id"], []).append(row["path"])
     return folders
+
+def get_catalog_file(project_id, file_id):
+    """One catalog row of the project, or None."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT id, path, name, extension, text_hash FROM catalog_files WHERE id = ? AND project_id = ?", (file_id, project_id)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def set_catalog_text_hash(file_id, content_hash):
+    """Records the content the file's text was last read from."""
+    with _transaction() as conn:
+        conn.execute("UPDATE catalog_files SET text_hash = ? WHERE id = ?", (content_hash, file_id))
+
+
+def get_cached_text(content_hash, extension, extractor_version):
+    """(unit, [text of each part, in order]) cached for this content, or None."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT id, unit FROM text_cache WHERE content_hash = ? AND extension = ? AND extractor_version = ?",
+            (content_hash, extension, extractor_version),
+        ).fetchone()
+        if row is None:
+            return None
+        parts = conn.execute("SELECT text FROM text_cache_parts WHERE cache_id = ? ORDER BY part", (row["id"],)).fetchall()
+        return row["unit"], [part["text"] for part in parts]
+    finally:
+        conn.close()
+
+
+def save_cached_text(content_hash, extension, extractor_version, unit, parts):
+    """Stores extracted text. Does nothing if the same content was stored first by another read."""
+    with _transaction() as conn:
+        cursor = conn.execute(
+            "INSERT INTO text_cache (content_hash, extension, extractor_version, unit) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
+            (content_hash, extension, extractor_version, unit),
+        )
+        if cursor.rowcount == 0:
+            return
+        conn.executemany(
+            "INSERT INTO text_cache_parts (cache_id, part, text) VALUES (?, ?, ?)",
+            [(cursor.lastrowid, number, text) for number, text in enumerate(parts, start=1)],
+        )
+
+
+_PRUNE_TEXT_CACHE = "DELETE FROM text_cache WHERE content_hash NOT IN (SELECT text_hash FROM catalog_files WHERE text_hash IS NOT NULL)"
+
+
+def prune_text_cache():
+    """Deletes cached text that no catalog file was last read from, and returns how many entries went."""
+    with _transaction() as conn:
+        return conn.execute(_PRUNE_TEXT_CACHE).rowcount
 
 
 if __name__ == "__main__":

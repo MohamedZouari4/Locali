@@ -8,7 +8,18 @@ import unittest
 
 from app.db import migrations
 
-TABLES = {"conversations", "messages", "audit_log", "jobs", "indexed_folders", "projects", "project_folders", "catalog_files"}
+TABLES = {
+    "conversations",
+    "messages",
+    "audit_log",
+    "jobs",
+    "indexed_folders",
+    "projects",
+    "project_folders",
+    "catalog_files",
+    "text_cache",
+    "text_cache_parts",
+}
 
 
 def _add_pinned(conn):
@@ -133,6 +144,21 @@ class MigrationsTestCase(unittest.TestCase):
         self.assertEqual(
             self.conn.execute("SELECT name, ignore_patterns, catalog_skipped FROM projects").fetchall(), [("Thesis", "[]", None)]
         )
+
+    def test_catalog_files_keep_their_rows_and_start_without_text(self):
+        """P1-E3-T1: migration 6 adds the text cache to a database that already has a catalog."""
+        migrations.migrate(self.conn, migrations.MIGRATIONS[:5])
+        with self.conn:
+            self.conn.execute("INSERT INTO projects (id, name) VALUES ('p1', 'Thesis')")
+            self.conn.execute(
+                "INSERT INTO catalog_files (project_id, file_key, path, name, extension, size, file_modified_at)"
+                " VALUES ('p1', 'path:a', 'C:/docs/a.txt', 'a.txt', 'txt', 5, '2026-10-12 10:00:00')"
+            )
+
+        migrations.migrate(self.conn)
+
+        self.assertEqual(self.conn.execute("SELECT name, text_hash FROM catalog_files").fetchall(), [("a.txt", None)])
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM text_cache").fetchone()[0], 0)
 
     def test_running_again_applies_nothing(self):
         migrations.migrate(self.conn)

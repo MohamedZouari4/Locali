@@ -1,6 +1,10 @@
 """Turns a file into plain text: checks its magic bytes, then reads PDF, DOCX, CSV, text, code,
 PSD layers or (with Tesseract OCR) images. Also tags language and token count.
+
+extract_parts keeps a PDF's pages apart, for the text cache; read_text joins them, for ingestion.
+EXTRACTOR_VERSION goes up whenever a reader's output changes, so cached text is extracted again.
 """
+
 
 import csv
 
@@ -47,6 +51,8 @@ BINARY_SIGNATURES = {
     "psd": (b"8BPS",),
 }
 DANGEROUS_SIGNATURES = ((b"MZ", "pe_executable"), (b"\x7fELF", "elf_executable"))
+# Bump when a reader's output changes, so text cached by the old readers is extracted again.
+EXTRACTOR_VERSION = 1
 
 
 def get_source_type(file_type):
@@ -66,14 +72,23 @@ def sniff_mime(filepath, declared_ext):
     return ("binary", False) if b"\x00" in head else ("text", True)
 
 
+def extract_parts(filepath):
+    """Extract a file's text as (unit, parts): one part per page for a PDF ("page"), the whole text as
+    one part for every other supported type ("section"). Returns None for unsupported types."""
+    ext = filepath.lower().rsplit(".", 1)[-1]
+    if ext == "pdf":
+        return "page", [page.extract_text() or "" for page in PdfReader(filepath).pages]
+    text = _read_whole(filepath, ext)
+    return None if text is None else ("section", [text])
+
+
 def read_text(filepath):
     """Extract text from a file based on its extension. Returns None for unsupported types."""
-    ext = filepath.lower().rsplit(".", 1)[-1]
+    extracted = extract_parts(filepath)
+    return None if extracted is None else "\n".join(extracted[1])
 
-    if ext == "pdf":
-        reader = PdfReader(filepath)
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
 
+def _read_whole(filepath, ext):
     if ext == "docx":
         doc = DocxDocument(filepath)
         return "\n".join(p.text for p in doc.paragraphs)

@@ -162,8 +162,37 @@ def _005_project_ignore_rules(conn):
     conn.execute("ALTER TABLE projects ADD COLUMN ignore_patterns TEXT NOT NULL DEFAULT '[]'")
     conn.execute("ALTER TABLE projects ADD COLUMN catalog_skipped TEXT")
 
+def _006_text_cache(conn):
+    # Extracted text, stored once per file content: the key is the SHA-256 of the file's bytes, its
+    # extension (which picks the reader) and the extractor version, so the same file in several projects
+    # shares one entry and a changed file or reader gets a new one. The text is redacted before it is stored.
+    conn.execute("""
+        CREATE TABLE text_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content_hash TEXT NOT NULL,
+            extension TEXT NOT NULL,
+            extractor_version INTEGER NOT NULL,
+            unit TEXT NOT NULL CHECK(unit IN ('page','section')),
+            extracted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (content_hash, extension, extractor_version)
+        )
+    """)
+    # One row per page of a PDF, or one section for other files, numbered from 1.
+    conn.execute("""
+        CREATE TABLE text_cache_parts (
+            cache_id INTEGER NOT NULL REFERENCES text_cache(id) ON DELETE CASCADE,
+            part INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            PRIMARY KEY (cache_id, part)
+        )
+    """)
+    # The content a catalog file's text was last read from, so cached text no file uses can be pruned.
+    conn.execute("ALTER TABLE catalog_files ADD COLUMN text_hash TEXT")
 
-MIGRATIONS = [_001_initial, _002_projects, _003_general_project, _004_catalog, _005_project_ignore_rules]
+
+
+
+MIGRATIONS = [_001_initial, _002_projects, _003_general_project, _004_catalog, _005_project_ignore_rules, _006_text_cache]
 
 
 def schema_version(conn):

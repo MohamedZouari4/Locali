@@ -139,8 +139,10 @@ class IdentityTests(CatalogTestCase):
         self._scan()
         old_id = self._catalog()["old.txt"]
 
-        os.remove(os.path.join(self.docs, "old.txt"))
+        # Created before the old file is deleted: Linux gives a freed inode to the next new file, which
+        # would make this look like a rename (see the limitation in the scanner's header).
         _write(os.path.join(self.docs, "new.txt"))
+        os.remove(os.path.join(self.docs, "old.txt"))
         result = self._scan()
 
         self.assertEqual(list(self._catalog()), ["new.txt"])
