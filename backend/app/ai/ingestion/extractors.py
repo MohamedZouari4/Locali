@@ -3,6 +3,7 @@ PSD layers or (with Tesseract OCR) images. Also tags language and token count.
 
 extract_parts keeps a PDF's pages apart, for the text cache; read_text joins them, for ingestion.
 EXTRACTOR_VERSION goes up whenever a reader's output changes, so cached text is extracted again.
+Word headings come out as Markdown headings (# Title), so a document can be read section by section.
 """
 
 
@@ -52,7 +53,7 @@ BINARY_SIGNATURES = {
 }
 DANGEROUS_SIGNATURES = ((b"MZ", "pe_executable"), (b"\x7fELF", "elf_executable"))
 # Bump when a reader's output changes, so text cached by the old readers is extracted again.
-EXTRACTOR_VERSION = 1
+EXTRACTOR_VERSION = 2
 
 
 def get_source_type(file_type):
@@ -91,7 +92,8 @@ def read_text(filepath):
 def _read_whole(filepath, ext):
     if ext == "docx":
         doc = DocxDocument(filepath)
-        return "\n".join(p.text for p in doc.paragraphs)
+        return "\n".join(_docx_line(p) for p in doc.paragraphs)
+
 
     if ext == "csv":
         with open(filepath, newline="", encoding="utf-8", errors="ignore") as f:
@@ -112,6 +114,16 @@ def _read_whole(filepath, ext):
     if ext in IMAGE_EXTENSIONS:
         return pytesseract.image_to_string(Image.open(filepath))
     return None
+
+def _docx_line(paragraph):
+    # A Title or Heading N paragraph becomes a Markdown heading; every other paragraph stays one plain line.
+    style = paragraph.style.name if paragraph.style is not None else ""
+    if style == "Title":
+        return f"# {paragraph.text}"
+    if style.startswith("Heading ") and style[8:].isdigit():
+        return f"{'#' * min(int(style[8:]), 6)} {paragraph.text}"
+    return paragraph.text
+
 
 
 def count_tokens(text):

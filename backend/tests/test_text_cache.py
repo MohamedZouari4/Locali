@@ -102,7 +102,7 @@ class SharingTests(TextCacheTestCase):
         file_id = self._file_id("notes.md")
         text_cache_service.read_text(self.project_id, file_id)
 
-        with patch.object(text_cache_service, "EXTRACTOR_VERSION", 2):
+        with patch.object(text_cache_service, "EXTRACTOR_VERSION", extractors.EXTRACTOR_VERSION + 1):
             text_cache_service.read_text(self.project_id, file_id)
 
         self.assertEqual(self.extract.call_count, 2)

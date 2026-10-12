@@ -149,6 +149,7 @@ All settings live in [backend/app/core/config.py](backend/app/core/config.py), g
 | `MAX_FILE_SIZE_MB` | `50` | Larger files are never indexed or catalogued. |
 | `WATCH_DEBOUNCE_MS` | `800` | The file watcher handles changes in batches collected over this long. |
 | `WATCH_FOLDERS_CHECK_SECONDS` | `5.0` | How often the file watcher looks for added or removed folders. |
+| `MAX_READ_CHARS` | `8000` | The most text one read of part of a file returns (a PDF page, a section or a line range); the reply gives the line it stopped at and the file's totals. |
 
 ### Paths (`PathSettings`)
 
