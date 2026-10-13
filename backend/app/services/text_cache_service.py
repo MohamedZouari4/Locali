@@ -3,6 +3,8 @@
 A file's text is looked up by the SHA-256 of its bytes, its extension (which picks the reader) and
 EXTRACTOR_VERSION, so an unchanged file is never extracted twice, a changed file is extracted again on its
 next read, and the same file in several projects shares one entry. The text is redacted before it is
+stored, like everything Locali embeds or stores, so the model only ever sees redacted text. A PDF is kept
+per page, any other file as one section.
 Every part is also in the full-text index, which the database keeps in step (text_search_service).
 
 The file is found through the project's catalog and checked against the project's folders

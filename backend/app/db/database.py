@@ -497,11 +497,17 @@ def save_cached_text(content_hash, extension, extractor_version, unit, parts):
         )
 
 
-_PRUNE_TEXT_CACHE = "DELETE FROM text_cache WHERE content_hash NOT IN (SELECT text_hash FROM catalog_files WHERE text_hash IS NOT NULL)"
+# Text no catalog file was last read from goes, and so does text from older readers or redaction rules,
+# which the current code never serves, so text redacted by old rules doesn't stay on disk.
+_PRUNE_TEXT_CACHE = (
+    "DELETE FROM text_cache WHERE content_hash NOT IN (SELECT text_hash FROM catalog_files WHERE text_hash IS NOT NULL)"
+    " OR extractor_version < (SELECT MAX(extractor_version) FROM text_cache)"
+)
 
 
 def prune_text_cache():
-    """Deletes cached text that no catalog file was last read from, and returns how many entries went."""
+    """Deletes cached text that no catalog file was last read from, or that older readers or redaction rules
+    produced, and returns how many entries went."""
     with _transaction() as conn:
         return conn.execute(_PRUNE_TEXT_CACHE).rowcount
 

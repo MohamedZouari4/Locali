@@ -8,7 +8,7 @@ A local-first RAG (retrieval-augmented generation) assistant that indexes files 
 
 - Multi-format ingestion for PDF, DOCX, CSV, text, Markdown, source code, PSD, and common image files (Tesseract OCR).
 - SHA-256 file hashing and incremental indexing of unchanged files; atomic replacement of a file's chunks.
-- PII and secret redaction before anything is embedded or stored, with a sensitivity label per chunk.
+- PII and secret redaction before anything is embedded or stored, with a sensitivity label per chunk. Secrets include long random-looking tokens and any value given to a key named like a password, secret, token or API key.
 - Persistent ChromaDB vector storage.
 - Hybrid dense + BM25 retrieval merged with reciprocal rank fusion, then optional local cross-encoder re-ranking.
 - Project/file-name-aware retrieval filtering.

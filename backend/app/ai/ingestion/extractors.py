@@ -2,7 +2,7 @@
 PSD layers or (with Tesseract OCR) images. Also tags language and token count.
 
 extract_parts keeps a PDF's pages apart, for the text cache; read_text joins them, for ingestion.
-EXTRACTOR_VERSION goes up whenever a reader's output changes, so cached text is extracted again.
+EXTRACTOR_VERSION goes up whenever a reader's output or a redaction rule changes, so cached text is extracted again.
 Word headings come out as Markdown headings (# Title), so a document can be read section by section.
 """
 
@@ -51,8 +51,9 @@ BINARY_SIGNATURES = {
     "psd": (b"8BPS",),
 }
 DANGEROUS_SIGNATURES = ((b"MZ", "pe_executable"), (b"\x7fELF", "elf_executable"))
-# Bump when a reader's output changes, so text cached by the old readers is extracted again.
-EXTRACTOR_VERSION = 2
+# Bump when a reader's output or a redaction rule changes, so text cached by the old ones is extracted again.
+# 3: values assigned to secret-named keys are redacted.
+EXTRACTOR_VERSION = 3
 
 
 def get_source_type(file_type):
