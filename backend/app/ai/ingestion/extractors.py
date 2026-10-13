@@ -6,7 +6,6 @@ EXTRACTOR_VERSION goes up whenever a reader's output changes, so cached text is 
 Word headings come out as Markdown headings (# Title), so a document can be read section by section.
 """
 
-
 import csv
 
 import pytesseract
@@ -94,7 +93,6 @@ def _read_whole(filepath, ext):
         doc = DocxDocument(filepath)
         return "\n".join(_docx_line(p) for p in doc.paragraphs)
 
-
     if ext == "csv":
         with open(filepath, newline="", encoding="utf-8", errors="ignore") as f:
             return "\n".join(", ".join(row) for row in csv.reader(f))
@@ -115,6 +113,7 @@ def _read_whole(filepath, ext):
         return pytesseract.image_to_string(Image.open(filepath))
     return None
 
+
 def _docx_line(paragraph):
     # A Title or Heading N paragraph becomes a Markdown heading; every other paragraph stays one plain line.
     style = paragraph.style.name if paragraph.style is not None else ""
@@ -123,7 +122,6 @@ def _docx_line(paragraph):
     if style.startswith("Heading ") and style[8:].isdigit():
         return f"{'#' * min(int(style[8:]), 6)} {paragraph.text}"
     return paragraph.text
-
 
 
 def count_tokens(text):

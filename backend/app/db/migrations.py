@@ -162,6 +162,7 @@ def _005_project_ignore_rules(conn):
     conn.execute("ALTER TABLE projects ADD COLUMN ignore_patterns TEXT NOT NULL DEFAULT '[]'")
     conn.execute("ALTER TABLE projects ADD COLUMN catalog_skipped TEXT")
 
+
 def _006_text_cache(conn):
     # Extracted text, stored once per file content: the key is the SHA-256 of the file's bytes, its
     # extension (which picks the reader) and the extractor version, so the same file in several projects
@@ -190,9 +191,53 @@ def _006_text_cache(conn):
     conn.execute("ALTER TABLE catalog_files ADD COLUMN text_hash TEXT")
 
 
+def _007_text_search(conn):
+    # Full-text search over the cached text with SQLite's built-in FTS5. The index reads its text from
+    # text_cache_parts (external content), so the text isn't stored twice. FTS5 finds each row by a stable
+    # integer key, and text_cache_parts only had its implicit rowid, which VACUUM may renumber, so the
+    # table is rebuilt with an id column first.
+    conn.execute("""
+        CREATE TABLE text_cache_parts_new (
+            id INTEGER PRIMARY KEY,
+            cache_id INTEGER NOT NULL REFERENCES text_cache(id) ON DELETE CASCADE,
+            part INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            UNIQUE (cache_id, part)
+        )
+    """)
+    conn.execute("INSERT INTO text_cache_parts_new (cache_id, part, text) SELECT cache_id, part, text FROM text_cache_parts")
+    conn.execute("DROP TABLE text_cache_parts")
+    conn.execute("ALTER TABLE text_cache_parts_new RENAME TO text_cache_parts")
+    # unicode61 with remove_diacritics 2 ignores case and accents, so "resume" also finds "Résumé".
+    conn.execute(
+        "CREATE VIRTUAL TABLE text_search USING fts5(text, content='text_cache_parts', content_rowid='id',"
+        " tokenize='unicode61 remove_diacritics 2')"
+    )
+    # The triggers keep the index in step with the cache whatever writes to it, including the cascade when
+    # cached text is pruned. An external-content index has to be given the old text to remove a row.
+    conn.execute("""
+        CREATE TRIGGER text_search_insert AFTER INSERT ON text_cache_parts BEGIN
+            INSERT INTO text_search (rowid, text) VALUES (new.id, new.text);
+        END
+    """)
+    conn.execute("""
+        CREATE TRIGGER text_search_delete AFTER DELETE ON text_cache_parts BEGIN
+            INSERT INTO text_search (text_search, rowid, text) VALUES ('delete', old.id, old.text);
+        END
+    """)
+    conn.execute("""
+        CREATE TRIGGER text_search_update AFTER UPDATE ON text_cache_parts BEGIN
+            INSERT INTO text_search (text_search, rowid, text) VALUES ('delete', old.id, old.text);
+            INSERT INTO text_search (rowid, text) VALUES (new.id, new.text);
+        END
+    """)
+    # Indexes the text already cached.
+    conn.execute("INSERT INTO text_search (text_search) VALUES ('rebuild')")
+    # A search finds the project's files by the content their text was read from.
+    conn.execute("CREATE INDEX idx_catalog_files_text ON catalog_files(project_id, text_hash)")
 
 
-MIGRATIONS = [_001_initial, _002_projects, _003_general_project, _004_catalog, _005_project_ignore_rules, _006_text_cache]
+MIGRATIONS = [_001_initial, _002_projects, _003_general_project, _004_catalog, _005_project_ignore_rules, _006_text_cache, _007_text_search]
 
 
 def schema_version(conn):

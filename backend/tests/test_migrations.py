@@ -19,6 +19,7 @@ TABLES = {
     "catalog_files",
     "text_cache",
     "text_cache_parts",
+    "text_search",
 }
 
 
@@ -159,6 +160,25 @@ class MigrationsTestCase(unittest.TestCase):
 
         self.assertEqual(self.conn.execute("SELECT name, text_hash FROM catalog_files").fetchall(), [("a.txt", None)])
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM text_cache").fetchone()[0], 0)
+
+    def test_text_already_cached_keeps_its_parts_and_becomes_searchable(self):
+        """P1-E3-T3: migration 7 rebuilds text_cache_parts with an id and indexes the text already cached."""
+        migrations.migrate(self.conn, migrations.MIGRATIONS[:6])
+        with self.conn:
+            self.conn.execute("INSERT INTO text_cache (content_hash, extension, extractor_version, unit) VALUES ('h1', 'pdf', 2, 'page')")
+            self.conn.execute(
+                "INSERT INTO text_cache_parts (cache_id, part, text) VALUES (1, 1, 'cover page'), (1, 2, 'quarterly tax report')"
+            )
+
+        migrations.migrate(self.conn)
+
+        parts = self.conn.execute("SELECT cache_id, part, text FROM text_cache_parts ORDER BY part").fetchall()
+        self.assertEqual(parts, [(1, 1, "cover page"), (1, 2, "quarterly tax report")])
+        found = self.conn.execute(
+            "SELECT p.part FROM text_search JOIN text_cache_parts p ON p.id = text_search.rowid WHERE text_search MATCH ?",
+            ('"tax report"',),
+        ).fetchall()
+        self.assertEqual(found, [(2,)])
 
     def test_running_again_applies_nothing(self):
         migrations.migrate(self.conn)

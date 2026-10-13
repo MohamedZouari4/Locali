@@ -16,6 +16,7 @@ A local-first RAG (retrieval-augmented generation) assistant that indexes files 
 - Projects: each has its own instructions and folders (with a Read or Act permission), and every chat belongs to one project. Folder paths are checked against the project boundary, with links, junctions and shortcuts resolved first.
 - Folders to index are chosen in the app. Indexing and forgetting a folder run as background jobs, with live progress and cancellation.
 - A file catalog per project: the name, type, size and dates of every file in the project's folders, scanned as a background job. Each file keeps a stable id when it is renamed or moved.
+- A text cache and full-text search per project: each file's text is extracted once per version (PDFs page by page), redacted, and indexed with SQLite's built-in FTS5, so words or a "quoted phrase" find the file, the page and a snippet.
 - Ignore rules: dependency and cache folders, files with keys or credentials, programs and media, and files over `MAX_FILE_SIZE_MB` are skipped everywhere, and sensitive files are never opened. Each project can add its own patterns (`*.log`, `drafts/`, `data/raw/*.csv`); Project settings shows what the last scan skipped.
 - A file watcher keeps each project's catalog and the search index current while Locali runs: new, changed, moved and deleted files are picked up within seconds, and deleted files drop out of answers at once.
 - Health checks for the model runtime, the required models, free disk space and OCR, each with a fix when something is wrong.
@@ -294,6 +295,7 @@ A database migrated by a newer Locali is refused at startup rather than changed.
 - A project's folders and instructions don't affect answers yet. The last project can't be deleted from the desktop.
 - A project's own ignore patterns apply to its catalog; search still uses the Indexed folders, which follow only the default rules.
 - Retrieval is not yet limited to a project's folders: the chat's optional `project` field only filters sources by path text.
+- Full-text search only covers files whose text has been read into the cache, and it isn't offered as a route or a chat tool yet.
 - Changes made while Locali is closed are picked up by the next Scan files or Index now, not at startup. On FAT and exFAT drives, such as most USB sticks, Windows file IDs change when a file moves, so a moved file there may get a new catalog id.
 - Source chips can only reveal files inside the workspace folder; indexed files elsewhere are refused.
 - Electron Builder packages only `dist/` and Electron files. It does not bundle Python, the backend, Tesseract, or Ollama models.

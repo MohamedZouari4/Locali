@@ -1,6 +1,6 @@
 """SQLite persistence (assistant.db): conversations, their messages, an audit_log table that
 mirrors file-tool actions, the background job queue run by app/jobs/worker.py, projects, each
-project's file catalog, and the text cache all projects share.
+project's file catalog, and the text cache all projects share, with its full-text index.
 """
 
 import contextlib
@@ -449,6 +449,7 @@ def list_all_project_folders():
         folders.setdefault(row["project_id"], []).append(row["path"])
     return folders
 
+
 def get_catalog_file(project_id, file_id):
     """One catalog row of the project, or None."""
     conn = get_connection()
@@ -503,6 +504,27 @@ def prune_text_cache():
     """Deletes cached text that no catalog file was last read from, and returns how many entries went."""
     with _transaction() as conn:
         return conn.execute(_PRUNE_TEXT_CACHE).rowcount
+
+
+def search_text(project_id, match, extractor_version, limit):
+    """Full-text hits in the project's catalogued files, best first: the file's id, name and path, the
+    cache unit and part number the words were found in, and a snippet with each match between ** marks.
+    `match` is an FTS5 query. Only text from the current readers (extractor_version) is searched."""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT f.id AS file_id, f.name, f.path, c.unit, p.part, snippet(text_search, 0, '**', '**', '…', 16) AS snippet"
+            " FROM text_search"
+            " JOIN text_cache_parts p ON p.id = text_search.rowid"
+            " JOIN text_cache c ON c.id = p.cache_id"
+            " JOIN catalog_files f ON f.text_hash = c.content_hash AND f.extension = c.extension"
+            " WHERE text_search MATCH ? AND f.project_id = ? AND c.extractor_version = ?"
+            " ORDER BY rank, f.path, p.part LIMIT ?",
+            (match, project_id, extractor_version, limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
