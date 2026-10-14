@@ -16,7 +16,7 @@ from app.api.main import app
 from app.core.security import API_TOKEN
 from app.db import database
 from app.services import chat_service
-from app.tools import audit_log, file_tools
+from app.tools import audit_log, file_tools, registry
 
 
 class PersistenceTestCase(unittest.TestCase):
@@ -125,7 +125,7 @@ class PersistenceTestCase(unittest.TestCase):
 
     def test_blocked_tool_call_is_audited_as_a_failure(self):
         tool_call = {"function": {"name": "move_file", "arguments": {"src": "../outside.txt", "dst": "x.txt"}}}
-        orchestrator._run_tool_calls([tool_call], [])
+        orchestrator._run_tool_calls([tool_call], [], registry.offer(6))
 
         action, _target_path, success = self._audit_rows()[0]
         self.assertTrue(action.startswith("blocked move_file"))

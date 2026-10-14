@@ -1,10 +1,12 @@
 """Answers a user question with the local chat model.
 
-Optionally adds retrieved document context to the prompt, then lets the model call the sandboxed
-file tools (list, move, create folder, organize, find empty files) for up to six rounds.
+Optionally adds retrieved document context to the prompt, then lets the model call the tools in the
+registry (app/tools/registry.py) for up to six rounds, offering at most MAX_TOOLS_PER_STEP of them.
 
-When file contents are in the prompt, the tools are not offered: text inside an indexed file
-must never be able to trigger a file operation.
+When file contents are in the prompt, no tools are offered, and the registry runs only offered tools:
+text inside an indexed file must never be able to trigger a file operation. Each tool result reaches
+the model as JSON: the result, or an error with one of the fixed codes in app/tools/errors.py.
+The model's answer is returned with the sources it used, and whether it called any tools.
 """
 
 import json
@@ -16,7 +18,8 @@ from app.ai.chat.prompts import SYSTEM_PROMPT, TOOL_LIMIT_MESSAGE, build_prompt
 from app.ai.chat.tool_schema import AVAILABLE_TOOLS, TOOLS_SCHEMA
 from app.ai.retrieval import retrieve
 from app.chat_events import SourcesEvent, TokenEvent
-from app.core.config import CHAT_MODEL, OLLAMA_URL
+from app.core.config import CHAT_MODEL, MAX_TOOLS_PER_STEP, OLLAMA_URL
+from app.tools import registry
 from app.tools.audit_log import log_action
 
 DEBUG = "--debug" in sys.argv
@@ -63,45 +66,39 @@ def _build_messages(query, use_docs, project):
     return messages, sources
 
 
-def _chat_payload(messages, with_tools, stream):
+def _offered_tools(sources):
+    # The tool cards to offer: none while retrieved file contents are in the prompt.
+    return [] if sources else registry.offer(MAX_TOOLS_PER_STEP)
+
+
+def _chat_payload(messages, offered, stream):
     payload = {"model": CHAT_MODEL, "messages": messages, "stream": stream}
-    if with_tools:
-        payload["tools"] = TOOLS_SCHEMA
+    if offered:
+        payload["tools"] = [registry.schema(card) for card in offered]
     return payload
 
 
-def _run_tool_calls(tool_calls, messages):
-    # Runs each requested tool and appends its result to the messages.
+def _run_tool_calls(tool_calls, messages, offered):
+    # Runs each requested tool through the registry and appends its result to the messages.
+    offered_names = {card.name for card in offered}
     for call in tool_calls:
         name = call["function"]["name"]
         arguments = call["function"]["arguments"]
         if DEBUG:
             print(f"[DEBUG] Tool call requested: {name}({arguments})")
-        fn = AVAILABLE_TOOLS.get(name)
-        if fn is None:
-            result = f"Error: unknown tool '{name}'"
-        else:
-            try:
-                result = fn(**arguments)
-            except PermissionError as e:
-                result = f"Blocked: {e}"
-                log_action(f"blocked {name}({arguments}): {e}", success=False)
-            except FileNotFoundError as e:
-                result = f"Not found: {e}"
-            except Exception as e:
-                result = f"Error running {name}: {e}"
+        result = registry.run(name, arguments, offered_names)
         if DEBUG:
             print(f"[DEBUG] Tool call result: {result}")
-        messages.append({"role": "tool", "content": str(result)})
+        messages.append({"role": "tool", "content": json.dumps(result, ensure_ascii=False, default=str)})
 
 
 def ask(query, use_docs=False, project=None):
     messages, sources = _build_messages(query, use_docs, project)
-    with_tools = not sources
+    offered = _offered_tools(sources)
     used_tools = False
     answer = TOOL_LIMIT_MESSAGE
     for _ in range(MAX_TOOL_ROUNDS):
-        resp = requests.post(f"{OLLAMA_URL}/api/chat", json=_chat_payload(messages, with_tools, stream=False))
+        resp = requests.post(f"{OLLAMA_URL}/api/chat", json=_chat_payload(messages, offered, stream=False))
         resp.raise_for_status()
         message = resp.json()["message"]
 
@@ -115,7 +112,7 @@ def ask(query, use_docs=False, project=None):
 
         used_tools = True
         messages.append(message)
-        _run_tool_calls(tool_calls, messages)
+        _run_tool_calls(tool_calls, messages, offered)
 
     return answer, sources, used_tools
 

@@ -22,7 +22,7 @@ A local-first RAG (retrieval-augmented generation) assistant that indexes files 
 - Ignore rules: dependency and cache folders, files with keys or credentials, programs and media, and files over `MAX_FILE_SIZE_MB` are skipped everywhere, and sensitive files are never opened. Each project can add its own patterns (`*.log`, `drafts/`, `data/raw/*.csv`); Project settings shows what the last scan skipped.
 - A file watcher keeps each project's catalog and the search index current while Locali runs: new, changed, moved and deleted files are picked up within seconds, and deleted files drop out of answers at once.
 - Health checks for the model runtime, the required models, free disk space and OCR, each with a fix when something is wrong.
-- Sandboxed file tools (list, move, create folder, organize by extension, find empty files) restricted to one workspace folder. Tools are withheld whenever file contents are in the prompt.
+- Sandboxed file tools (list, move, create folder, organize by extension, find empty files) restricted to one workspace folder. Each tool has a card (purpose, parameters, output, risk level L0–L4, space, undo, network) and a tool without one can't load; errors come back with fixed codes (`not_found`, `outside_boundary`, `too_large`, …). At most `MAX_TOOLS_PER_STEP` tools are offered at a time, and tools are withheld, and refused if called, whenever file contents are in the prompt.
 - Hash-chained, tamper-evident action log in `logs/actions.log`, mirrored into SQLite.
 - FastAPI routes for chat, conversations, projects, jobs, indexed folders, search, ingestion and file operations, behind a bearer token.
 - SQLite persistence for projects, conversations, jobs and audit records, with versioned schema migrations. Every chat turn is saved, and a reply cut off by an error, Stop or a crash is kept and marked incomplete.
@@ -61,12 +61,12 @@ backend/                         Python backend (run Python commands from here)
       ai/
          ingestion/              walker, extractors, redaction, chunking, embeddings, store, pipeline
          retrieval/              dense, sparse (BM25), hybrid (RRF), reranker, retriever
-         chat/                   orchestrator, prompts, tool_schema
+         chat/                   orchestrator, prompts
       services/                  rules between routers and the rest: chat, projects, project_boundary, folders, health, rag, tools, watch
       jobs/                      worker.py (background job queue), demo.py (test job kind)
       catalog/                   scanner.py (walks a project's folders, stable file identity)
       db/                        database.py (SQLite), migrations.py (schema versions)
-      tools/                     file_tools.py (sandboxed tools), audit_log.py (hash chain)
+      tools/                     file_tools.py (sandboxed tools), cards.py (tool cards), registry.py (loading, offering, running), errors.py (fixed codes), audit_log.py (hash chain)
       chat_events.py             /chat/stream event contract (docs/CHAT_EVENTS.md)
       job_events.py              /jobs/events event contract (docs/JOB_EVENTS.md)
       cli.py                     terminal chat
@@ -153,6 +153,7 @@ All settings live in [backend/app/core/config.py](backend/app/core/config.py), g
 | `WATCH_DEBOUNCE_MS` | `800` | The file watcher handles changes in batches collected over this long. |
 | `WATCH_FOLDERS_CHECK_SECONDS` | `5.0` | How often the file watcher looks for added or removed folders. |
 | `MAX_READ_CHARS` | `8000` | The most text one read of part of a file returns (a PDF page, a section or a line range); the reply gives the line it stopped at and the file's totals. |
+| `MAX_TOOLS_PER_STEP` | `6` | The chat model is offered at most this many tools at a time, the lowest risk first; a small model chooses better from few. |
 | `PREEXTRACT_ENABLED` | `True` | Reads small files into the text cache while the computer is idle. Windows only; elsewhere idleness can't be measured, so it never runs. |
 | `PREEXTRACT_IDLE_SECONDS` | `120` | No keyboard or mouse input for this long counts as idle. |
 | `PREEXTRACT_MAX_FILE_MB` | `5` | Only files up to this size, with a text reader (not images), are read ahead. |
