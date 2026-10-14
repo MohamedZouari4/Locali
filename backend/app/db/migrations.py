@@ -237,7 +237,48 @@ def _007_text_search(conn):
     conn.execute("CREATE INDEX idx_catalog_files_text ON catalog_files(project_id, text_hash)")
 
 
-MIGRATIONS = [_001_initial, _002_projects, _003_general_project, _004_catalog, _005_project_ignore_rules, _006_text_cache, _007_text_search]
+def _008_search_terms(conn):
+    # Full-text search now indexes each part's search terms (app/core/text_terms.py) instead of its raw text,
+    # so it splits and folds words exactly like keyword search, in any script: FTS5's own tokenizer splits
+    # Arabic words at their vowel marks, keeps أ and ا apart and can't find words in Chinese. The terms are
+    # written by the code that caches text. Text cached before this has none, but EXTRACTOR_VERSION went up
+    # with this change, so that text is never searched and is read again.
+    conn.execute("DROP TRIGGER text_search_insert")
+    conn.execute("DROP TRIGGER text_search_delete")
+    conn.execute("DROP TRIGGER text_search_update")
+    conn.execute("DROP TABLE text_search")
+    conn.execute("ALTER TABLE text_cache_parts ADD COLUMN terms TEXT NOT NULL DEFAULT ''")
+    # The terms are already split, folded and joined by spaces; the ascii tokenizer splits on the spaces only,
+    # because it treats every character outside ASCII as part of a word.
+    conn.execute("CREATE VIRTUAL TABLE text_search USING fts5(terms, content='text_cache_parts', content_rowid='id', tokenize='ascii')")
+    conn.execute("""
+        CREATE TRIGGER text_search_insert AFTER INSERT ON text_cache_parts BEGIN
+            INSERT INTO text_search (rowid, terms) VALUES (new.id, new.terms);
+        END
+    """)
+    conn.execute("""
+        CREATE TRIGGER text_search_delete AFTER DELETE ON text_cache_parts BEGIN
+            INSERT INTO text_search (text_search, rowid, terms) VALUES ('delete', old.id, old.terms);
+        END
+    """)
+    conn.execute("""
+        CREATE TRIGGER text_search_update AFTER UPDATE ON text_cache_parts BEGIN
+            INSERT INTO text_search (text_search, rowid, terms) VALUES ('delete', old.id, old.terms);
+            INSERT INTO text_search (rowid, terms) VALUES (new.id, new.terms);
+        END
+    """)
+
+
+MIGRATIONS = [
+    _001_initial,
+    _002_projects,
+    _003_general_project,
+    _004_catalog,
+    _005_project_ignore_rules,
+    _006_text_cache,
+    _007_text_search,
+    _008_search_terms,
+]
 
 
 def schema_version(conn):

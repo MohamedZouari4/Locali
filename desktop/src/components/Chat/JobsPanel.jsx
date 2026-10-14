@@ -4,7 +4,7 @@
 import { isActive } from '../../hooks/useJobs'
 import { Icon } from '../Icon'
 
-const titles = { demo: 'Demo job', ingest: 'Indexing files', forget_folder: 'Removing a folder', catalog: 'Scanning project files', reindex: 'Updating changed files' }
+const titles = { demo: 'Demo job', ingest: 'Indexing files', forget_folder: 'Removing a folder', catalog: 'Scanning project files', reindex: 'Updating changed files', preextract: 'Reading files ahead' }
 const outcomes = { queued: 'Waiting', done: 'Done', failed: 'Failed', cancelled: 'Cancelled' }
 
 function JobRow({ job, onCancel }) {

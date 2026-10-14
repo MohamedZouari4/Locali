@@ -17,6 +17,8 @@ A local-first RAG (retrieval-augmented generation) assistant that indexes files 
 - Folders to index are chosen in the app. Indexing and forgetting a folder run as background jobs, with live progress and cancellation.
 - A file catalog per project: the name, type, size and dates of every file in the project's folders, scanned as a background job. Each file keeps a stable id when it is renamed or moved.
 - A text cache and full-text search per project: each file's text is extracted once per version (PDFs page by page), redacted, and indexed with SQLite's built-in FTS5, so words or a "quoted phrase" find the file, the page and a snippet.
+- Keyword search (BM25 and full-text) works in any script: words are matched regardless of case, accents, Arabic vowel marks and letter forms (أ/إ/آ → ا, ى → ي, ة → ه), and Chinese, Japanese and Thai text is split into character pairs.
+- Idle-time pre-extraction (Windows): while the computer has had no input for two minutes, runs on mains power and Locali has nothing else to do, small files are read into the text cache in short background jobs, so a first question about them is faster. It stops before the next file as soon as any of that changes.
 - Ignore rules: dependency and cache folders, files with keys or credentials, programs and media, and files over `MAX_FILE_SIZE_MB` are skipped everywhere, and sensitive files are never opened. Each project can add its own patterns (`*.log`, `drafts/`, `data/raw/*.csv`); Project settings shows what the last scan skipped.
 - A file watcher keeps each project's catalog and the search index current while Locali runs: new, changed, moved and deleted files are picked up within seconds, and deleted files drop out of answers at once.
 - Health checks for the model runtime, the required models, free disk space and OCR, each with a fix when something is wrong.
@@ -151,6 +153,11 @@ All settings live in [backend/app/core/config.py](backend/app/core/config.py), g
 | `WATCH_DEBOUNCE_MS` | `800` | The file watcher handles changes in batches collected over this long. |
 | `WATCH_FOLDERS_CHECK_SECONDS` | `5.0` | How often the file watcher looks for added or removed folders. |
 | `MAX_READ_CHARS` | `8000` | The most text one read of part of a file returns (a PDF page, a section or a line range); the reply gives the line it stopped at and the file's totals. |
+| `PREEXTRACT_ENABLED` | `True` | Reads small files into the text cache while the computer is idle. Windows only; elsewhere idleness can't be measured, so it never runs. |
+| `PREEXTRACT_IDLE_SECONDS` | `120` | No keyboard or mouse input for this long counts as idle. |
+| `PREEXTRACT_MAX_FILE_MB` | `5` | Only files up to this size, with a text reader (not images), are read ahead. |
+| `PREEXTRACT_BATCH_SECONDS` | `20.0` | One `preextract` job reads files for at most this long. |
+| `PREEXTRACT_CHECK_SECONDS` | `30.0` | How often the scheduler looks whether to queue the next `preextract` job. |
 
 ### Paths (`PathSettings`)
 
@@ -235,7 +242,7 @@ All routes except `/health` require `Authorization: Bearer <contents of .auth_to
 | `DELETE` | `/projects/{id}/folders/{folder_id}` | Takes a folder off the project; its files are not touched. `204`, or `404` if unknown. |
 | `POST` | `/projects/{id}/catalog` | Queues a `catalog` job that lists every file in the project's folders; `202` with the job, or `404`. Follow it on `/jobs/events`. |
 | `GET` | `/projects/{id}/catalog?limit=1000&offset=0` | The catalogued files in path order: `id` (kept across renames and moves), `path`, `name`, `extension`, `size`, `file_created_at`, `file_modified_at`, `catalogued_at`. |
-| `POST` | `/jobs` | Starts a background job; body `{ "kind": "...", "params": {...}, "project": "default" }`; `202`, `422` for an unknown kind, or `409` if that kind allows only one active job. Kinds: `ingest`, `forget_folder`, `catalog`, `reindex`, and `demo` with `LOCALI_DEMO_JOBS=1`. |
+| `POST` | `/jobs` | Starts a background job; body `{ "kind": "...", "params": {...}, "project": "default" }`; `202`, `422` for an unknown kind, or `409` if that kind allows only one active job. Kinds: `ingest`, `forget_folder`, `catalog`, `reindex`, `preextract`, and `demo` with `LOCALI_DEMO_JOBS=1`. |
 | `GET` | `/jobs?state=...&limit=50` | Jobs newest first, optionally only some states. |
 | `GET` | `/jobs/{id}` | One job with its state, progress and result or error; `404` if unknown. |
 | `POST` | `/jobs/{id}/cancel` | Cancels a queued job at once; a running job stops at its next check. |
@@ -296,6 +303,7 @@ A database migrated by a newer Locali is refused at startup rather than changed.
 - A project's own ignore patterns apply to its catalog; search still uses the Indexed folders, which follow only the default rules.
 - Retrieval is not yet limited to a project's folders: the chat's optional `project` field only filters sources by path text.
 - Full-text search only covers files whose text has been read into the cache, and it isn't offered as a route or a chat tool yet.
+- Pre-extraction only runs on Windows, and it doesn't read a changed file again until something reads it; files never read, or cached by an older reader, are picked up.
 - Changes made while Locali is closed are picked up by the next Scan files or Index now, not at startup. On FAT and exFAT drives, such as most USB sticks, Windows file IDs change when a file moves, so a moved file there may get a new catalog id.
 - Source chips can only reveal files inside the workspace folder; indexed files elsewhere are refused.
 - Electron Builder packages only `dist/` and Electron files. It does not bundle Python, the backend, Tesseract, or Ollama models.

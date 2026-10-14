@@ -1,6 +1,7 @@
 """Tests for full-text search over the text cache (P1-E3-T3): a phrase finds the right file and page,
 fast on a medium project; the index follows the cache as files change and are pruned; each project
-only sees its own files; and typed punctuation is searched as words. Uses a temporary database and folders.
+only sees its own files; typed punctuation is searched as words; and Arabic, accented and Chinese words are
+found (P1-E3-T6). Uses a temporary database and folders.
 """
 
 import os
@@ -156,6 +157,29 @@ class ScopeTests(TextSearchTestCase):
             text_search_service.search(self.project_id, query)  # none of these raise
         self.assertEqual(self._found("rust near"), [("code.txt", None)])
         self.assertEqual(self._found("   "), [])
+
+
+class MultilingualTests(TextSearchTestCase):
+    """P1-E3-T6: the full-text index splits and folds words like keyword search, in any script."""
+
+    def test_an_arabic_question_finds_the_arabic_document(self):
+        _write(os.path.join(self.docs, "budget.txt"), "اجتمع المُديرُ مع الموظفين لمناقشة الميزانيّة السنوية.")
+        _write(os.path.join(self.docs, "notes.txt"), "The annual budget meeting.")
+        self._read_all()
+
+        hits = text_search_service.search(self.project_id, "الميزانية السنوية")
+
+        self.assertEqual([hit["name"] for hit in hits], ["budget.txt"])
+        self.assertEqual(hits[0]["snippet"], "اجتمع المُديرُ مع الموظفين لمناقشة **الميزانيّة السنوية**.")
+
+    def test_accents_and_chinese_words_are_found(self):
+        _write(os.path.join(self.docs, "fr.txt"), "La réunion du conseil")
+        _write(os.path.join(self.docs, "zh.txt"), "会议记录在这里")
+        self._read_all()
+
+        self.assertEqual(self._found("reunion"), [("fr.txt", None)])
+        self.assertEqual(self._found("Réunion"), [("fr.txt", None)])
+        self.assertEqual(self._found("记录"), [("zh.txt", None)])
 
 
 if __name__ == "__main__":

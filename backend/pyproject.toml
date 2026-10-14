@@ -12,6 +12,7 @@ dependencies = [
     "pytesseract>=0.3.13",
     "python-docx>=1.2.0",
     "rank-bm25>=0.2.2",
+    "regex>=2026.9.29",
     "requests>=2.34.2",
     "sentence-transformers>=5.6.1",
     # Listed directly so it can come from the CPU-only index below (the reranker runs on CPU).

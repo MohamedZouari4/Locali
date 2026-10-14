@@ -1,12 +1,14 @@
 """Keyword (BM25) retrieval over the indexed chunks, plus helpers that narrow the search
 to sources whose path matches words in the query or the selected project.
-"""
 
-import re
+Chunks and queries are split into terms by app/core/text_terms.py, so words in any script are found,
+whatever their case, accents or Arabic letter forms.
+"""
 
 from rank_bm25 import BM25Okapi
 
 from app.ai.ingestion.store import get_collection
+from app.core.text_terms import tokenize
 
 _STOPWORDS = {
     "the",
@@ -55,10 +57,6 @@ def all_sources(refresh=False):
         sources.update(m["source"] for m in batch["metadatas"])
     _source_cache = sources
     return sources
-
-
-def tokenize(text):
-    return re.findall(r"[a-z0-9]+", text.lower())
 
 
 def build_bm25_index(refresh=False):

@@ -170,7 +170,7 @@ class MigrationsTestCase(unittest.TestCase):
                 "INSERT INTO text_cache_parts (cache_id, part, text) VALUES (1, 1, 'cover page'), (1, 2, 'quarterly tax report')"
             )
 
-        migrations.migrate(self.conn)
+        migrations.migrate(self.conn, migrations.MIGRATIONS[:7])
 
         parts = self.conn.execute("SELECT cache_id, part, text FROM text_cache_parts ORDER BY part").fetchall()
         self.assertEqual(parts, [(1, 1, "cover page"), (1, 2, "quarterly tax report")])
@@ -179,6 +179,30 @@ class MigrationsTestCase(unittest.TestCase):
             ('"tax report"',),
         ).fetchall()
         self.assertEqual(found, [(2,)])
+
+    def test_cached_text_keeps_its_parts_and_new_text_is_found_by_its_terms(self):
+        """P1-E3-T6: migration 8 adds search terms to the cached parts and indexes the terms instead of the text."""
+        migrations.migrate(self.conn, migrations.MIGRATIONS[:7])
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO text_cache (content_hash, extension, extractor_version, unit) VALUES ('h1', 'txt', 3, 'section')"
+            )
+            self.conn.execute("INSERT INTO text_cache_parts (cache_id, part, text) VALUES (1, 1, 'quarterly tax report')")
+
+        migrations.migrate(self.conn)
+
+        self.assertEqual(self.conn.execute("SELECT text, terms FROM text_cache_parts").fetchall(), [("quarterly tax report", "")])
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO text_cache (content_hash, extension, extractor_version, unit) VALUES ('h2', 'txt', 4, 'section')"
+            )
+            self.conn.execute("INSERT INTO text_cache_parts (cache_id, part, text, terms) VALUES (2, 1, 'Le Ministère', 'le ministere')")
+        found = self.conn.execute(
+            "SELECT p.text FROM text_search JOIN text_cache_parts p ON p.id = text_search.rowid WHERE text_search MATCH ?",
+            ('"ministere"',),
+        ).fetchall()
+        self.assertEqual(found, [("Le Ministère",)])
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM text_search WHERE text_search MATCH 'tax'").fetchone()[0], 0)
 
     def test_running_again_applies_nothing(self):
         migrations.migrate(self.conn)

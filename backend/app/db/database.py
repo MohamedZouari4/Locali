@@ -9,6 +9,7 @@ import sqlite3
 import uuid
 
 from app.core.config import DB_PATH
+from app.core.text_terms import tokenize
 from app.db import migrations
 
 _initialized = False
@@ -248,6 +249,22 @@ def recover_interrupted_jobs():
         return conn.execute(
             "UPDATE jobs SET state = 'failed', error = 'Interrupted by a restart', finished_at = CURRENT_TIMESTAMP WHERE state = 'running'"
         ).rowcount
+
+
+def has_active_work(except_kind=None):
+    """Whether Locali is busy for the user: a job of a kind other than `except_kind` queued or running,
+    or a chat reply being written."""
+    conn = get_connection()
+    try:
+        return bool(
+            conn.execute(
+                "SELECT EXISTS (SELECT 1 FROM jobs WHERE state IN ('queued', 'running') AND kind IS NOT ?)"
+                " OR EXISTS (SELECT 1 FROM messages WHERE status = 'streaming')",
+                (except_kind,),
+            ).fetchone()[0]
+        )
+    finally:
+        conn.close()
 
 
 def list_jobs(states=None, limit=50, kind=None):
@@ -492,8 +509,8 @@ def save_cached_text(content_hash, extension, extractor_version, unit, parts):
         if cursor.rowcount == 0:
             return
         conn.executemany(
-            "INSERT INTO text_cache_parts (cache_id, part, text) VALUES (?, ?, ?)",
-            [(cursor.lastrowid, number, text) for number, text in enumerate(parts, start=1)],
+            "INSERT INTO text_cache_parts (cache_id, part, text, terms) VALUES (?, ?, ?, ?)",
+            [(cursor.lastrowid, number, text, " ".join(tokenize(text))) for number, text in enumerate(parts, start=1)],
         )
 
 
@@ -512,14 +529,34 @@ def prune_text_cache():
         return conn.execute(_PRUNE_TEXT_CACHE).rowcount
 
 
-def search_text(project_id, match, extractor_version, limit):
-    """Full-text hits in the project's catalogued files, best first: the file's id, name and path, the
-    cache unit and part number the words were found in, and a snippet with each match between ** marks.
-    `match` is an FTS5 query. Only text from the current readers (extractor_version) is searched."""
+def list_uncached_files(extractor_version, max_size, extensions, skip_ids, limit):
+    """Catalogued files in any project whose current text isn't cached by this extractor version (never
+    read, or read by older readers), as [{"id", "project_id"}]: at most max_size bytes, with one of
+    `extensions`, not in skip_ids, most recently modified first."""
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT f.id AS file_id, f.name, f.path, c.unit, p.part, snippet(text_search, 0, '**', '**', '…', 16) AS snippet"
+            "SELECT f.id, f.project_id FROM catalog_files f"
+            " LEFT JOIN text_cache c ON c.content_hash = f.text_hash AND c.extension = f.extension AND c.extractor_version = ?"
+            " WHERE c.id IS NULL AND f.size <= ? AND f.extension IN (SELECT value FROM json_each(?))"
+            " AND f.id NOT IN (SELECT value FROM json_each(?))"
+            " ORDER BY f.file_modified_at DESC, f.id LIMIT ?",
+            (extractor_version, max_size, json.dumps(sorted(extensions)), json.dumps(sorted(skip_ids)), limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def search_text(project_id, match, extractor_version, limit):
+    """Full-text hits in the project's catalogued files, best first: the file's id, name and path, the
+    cache unit and part number the words were found in, and that part's text.
+    `match` is an FTS5 query over search terms (app/core/text_terms.py). Only text from the current readers
+    (extractor_version) is searched."""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT f.id AS file_id, f.name, f.path, c.unit, p.part, p.text"
             " FROM text_search"
             " JOIN text_cache_parts p ON p.id = text_search.rowid"
             " JOIN text_cache c ON c.id = p.cache_id"

@@ -41,6 +41,11 @@ class LimitSettings:
     max_file_size_mb: int = 50  # larger files are never indexed or catalogued
     max_read_chars: int = 8000  # one read of part of a file returns at most this much text, so it fits the model's context
     watch_folders_check_seconds: float = 5.0  # how often the file watcher looks for added or removed folders
+    preextract_enabled: bool = True  # read small files into the text cache while the computer is idle (Windows only)
+    preextract_idle_seconds: int = 120  # no keyboard or mouse input for this long counts as idle
+    preextract_max_file_mb: int = 5  # only files up to this size are read ahead
+    preextract_batch_seconds: float = 20.0  # one preextract job reads files for at most this long
+    preextract_check_seconds: float = 30.0  # how often the scheduler looks whether to queue the next job
 
 
 @dataclass(frozen=True)
@@ -259,6 +264,11 @@ WATCH_FOLDERS_CHECK_SECONDS = LIMITS.watch_folders_check_seconds
 JOB_PROGRESS_INTERVAL_SECONDS = LIMITS.job_progress_interval_seconds
 JOB_CANCEL_CHECK_SECONDS = LIMITS.job_cancel_check_seconds
 JOB_EVENTS_POLL_SECONDS = LIMITS.job_events_poll_seconds
+PREEXTRACT_ENABLED = LIMITS.preextract_enabled
+PREEXTRACT_IDLE_SECONDS = LIMITS.preextract_idle_seconds
+PREEXTRACT_MAX_FILE_MB = LIMITS.preextract_max_file_mb
+PREEXTRACT_BATCH_SECONDS = LIMITS.preextract_batch_seconds
+PREEXTRACT_CHECK_SECONDS = LIMITS.preextract_check_seconds
 
 VECTOR_DIR = PATHS.vector_dir
 DB_PATH = PATHS.db_path
