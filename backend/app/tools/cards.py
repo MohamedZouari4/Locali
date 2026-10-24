@@ -113,4 +113,19 @@ CARDS = [
         access="act",
         undo="Move each file back to the folder.",
     ),
+        ToolCard(
+        name="project_overview",
+        purpose="Summarize the active project's catalogued folder structure, file counts by type, and recent file changes.",
+        parameters={
+            "project_id": _string("The ID of the active project to summarize."),
+        },
+        required=("project_id",),
+        output={
+            "type": "object",
+            "description": "A compact project overview containing folders, file structure, type counts and recent changes.",
+        },
+        risk="L0",
+        space="project",
+        access="read",
+    ),
 ]

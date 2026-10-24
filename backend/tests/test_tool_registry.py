@@ -106,12 +106,14 @@ class OutputTests(RegistryTestCase):
     def test_each_tool_returns_its_declared_output_shape(self):
         self._write("empty.txt")
         self._write("full.txt", "text")
+        project_id = database.create_project("Project", folders=[(self.root, "read")])["id"]
         calls = [
             ("list_files", {"path": "."}),
             ("find_empty_files", {"folder": "."}),
             ("create_folder", {"path": "reports"}),
             ("move_file", {"src": "full.txt", "dst": "reports/full.txt"}),
             ("organize_by_extension", {"folder": "reports"}),
+            ("project_overview", {"project_id": project_id}),
         ]
         self.assertEqual({name for name, _ in calls}, ALL_TOOLS)
         python_types = {"array": list, "string": str, "object": dict}
@@ -123,6 +125,14 @@ class OutputTests(RegistryTestCase):
                 self.assertIsInstance(result["result"], python_types[card.output["type"]])
                 if card.output["type"] == "array":
                     self.assertTrue(all(isinstance(item, str) for item in result["result"]))
+
+    def test_project_overview_is_read_only_and_returns_an_object(self):
+        project_id = database.create_project("Project", folders=[(self.root, "read")])["id"]
+
+        result = registry.run("project_overview", {"project_id": project_id}, ALL_TOOLS)
+
+        self.assertTrue(result["ok"], result)
+        self.assertIsInstance(result["result"], dict)
 
 
 class ErrorCodeTests(RegistryTestCase):

@@ -15,12 +15,10 @@ import sys
 import requests
 
 from app.ai.chat.prompts import SYSTEM_PROMPT, TOOL_LIMIT_MESSAGE, build_prompt
-from app.ai.chat.tool_schema import AVAILABLE_TOOLS, TOOLS_SCHEMA
 from app.ai.retrieval import retrieve
 from app.chat_events import SourcesEvent, TokenEvent
 from app.core.config import CHAT_MODEL, MAX_TOOLS_PER_STEP, OLLAMA_URL
 from app.tools import registry
-from app.tools.audit_log import log_action
 
 DEBUG = "--debug" in sys.argv
 MAX_TOOL_ROUNDS = 6
@@ -49,7 +47,8 @@ def build_context(query, k=4, project=None):
     return context_block, sources
 
 
-def _build_messages(query, use_docs, project):
+
+def _build_messages(query, use_docs, project, project_id):
     # Returns the chat history to send to the model and the sources used to build the context.
     sources = []
     if use_docs:
@@ -57,8 +56,11 @@ def _build_messages(query, use_docs, project):
         prompt = build_prompt(query, context_block)
     else:
         prompt = query
+    if project_id:
+        prompt = f"Active project ID: {project_id}\n\n{prompt}"
     if DEBUG:
         print(f"\n[DEBUG] Final prompt sent to model:\n{prompt[:1000]}\n")
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": prompt},
@@ -92,8 +94,9 @@ def _run_tool_calls(tool_calls, messages, offered):
         messages.append({"role": "tool", "content": json.dumps(result, ensure_ascii=False, default=str)})
 
 
-def ask(query, use_docs=False, project=None):
-    messages, sources = _build_messages(query, use_docs, project)
+
+def ask(query, use_docs=False, project=None, project_id=None):
+    messages, sources = _build_messages(query, use_docs, project, project_id)
     offered = _offered_tools(sources)
     used_tools = False
     answer = TOOL_LIMIT_MESSAGE
@@ -117,11 +120,11 @@ def ask(query, use_docs=False, project=None):
     return answer, sources, used_tools
 
 
-def ask_stream(query, use_docs=False, project=None):
+def ask_stream(query, use_docs=False, project=None, project_id=None):
     # Same as ask(), but yields the answer token by token, then an event with the sources.
     # The caller saves the reply and ends the stream with a done event.
-    messages, sources = _build_messages(query, use_docs, project)
-    with_tools = not sources
+    messages, sources = _build_messages(query, use_docs, project, project_id)
+    offered = _offered_tools(sources)
     answer = TOOL_LIMIT_MESSAGE
     for _ in range(MAX_TOOL_ROUNDS):
         tool_calls = []
@@ -130,7 +133,7 @@ def ask_stream(query, use_docs=False, project=None):
         # which makes Ollama stop generating.
         with requests.post(
             f"{OLLAMA_URL}/api/chat",
-            json=_chat_payload(messages, with_tools, stream=True),
+            json=_chat_payload(messages, offered, stream=True),
             stream=True,
         ) as resp:
             resp.raise_for_status()
@@ -152,7 +155,7 @@ def ask_stream(query, use_docs=False, project=None):
             break
 
         messages.append({"role": "assistant", "content": "".join(parts), "tool_calls": tool_calls})
-        _run_tool_calls(tool_calls, messages)
+        _run_tool_calls(tool_calls, messages, offered)
     else:
         # The loop ran out of rounds without a final answer.
         yield TokenEvent(text=answer)

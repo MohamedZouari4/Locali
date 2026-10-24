@@ -23,7 +23,7 @@ def begin_turn(project_id, conversation_id, message):
 def get_answer(message, *, project_id, use_docs=False, project=None, conversation_id=None):
     conversation_id, reply_id = begin_turn(project_id, conversation_id, message)
     try:
-        answer, sources, used_tools = ask(message, use_docs=use_docs, project=project)
+        answer, sources, used_tools = ask(message, use_docs=use_docs, project=project, project_id=project_id)
     except BaseException:
         database.finish_turn(reply_id, "", complete=False)
         raise

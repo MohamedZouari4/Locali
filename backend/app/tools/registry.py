@@ -12,7 +12,7 @@ from errors.ERROR_CODES. Calls blocked at the boundary are written to the audit 
 import inspect
 import logging
 
-from app.tools import file_tools
+from app.tools import file_tools, project_tools
 from app.tools.audit_log import log_action
 from app.tools.cards import CARDS, RISK_LEVELS, check
 from app.tools.errors import ToolError, from_exception
@@ -26,6 +26,7 @@ FUNCTIONS = {
     "create_folder": file_tools.create_folder,
     "move_file": file_tools.move_file,
     "organize_by_extension": file_tools.organize_by_extension,
+    "project_overview": project_tools.project_overview,
 }
 
 

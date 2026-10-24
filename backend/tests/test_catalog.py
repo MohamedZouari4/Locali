@@ -96,6 +96,50 @@ class AcceptanceTests(CatalogTestCase):
         self.assertEqual(self._catalog(), {"final.txt": file_id})
         self.assertEqual((result["renamed"], result["added"], result["removed"]), (1, 0, 0))
 
+    def test_project_overview_summarizes_catalog_structure_and_types(self):
+        _write(os.path.join(self.docs, "README.md"))
+        _write(os.path.join(self.docs, "src", "main.py"))
+        _write(os.path.join(self.docs, "src", "helper.py"))
+        _write(os.path.join(self.docs, "notes"))
+        self._scan()
+
+        overview = catalog_service.project_overview(self.project_id)
+
+        self.assertEqual(overview["file_count"], 4)
+        self.assertEqual(overview["by_type"], {"py": 2, "md": 1, "other": 1})
+        self.assertEqual(
+            [file["path"] for file in overview["files"]],
+            [
+                os.path.join(self.docs, "README.md"),
+                os.path.join(self.docs, "notes"),
+                os.path.join(self.docs, "src", "helper.py"),
+                os.path.join(self.docs, "src", "main.py"),
+            ],
+        )
+        self.assertFalse(overview["truncated"])
+
+    def test_project_overview_lists_recent_catalog_changes(self):
+        _write(os.path.join(self.docs, "old.txt"))
+        self._scan()
+
+        time.sleep(1.1)
+        _write(os.path.join(self.docs, "new.txt"))
+        self._scan()
+
+        overview = catalog_service.project_overview(self.project_id, recent_limit=1)
+
+        self.assertEqual(overview["recent_changes"][0]["path"], os.path.join(self.docs, "new.txt"))
+
+    def test_project_overview_uses_catalog_not_current_disk(self):
+        _write(os.path.join(self.docs, "kept.txt"))
+        self._scan()
+        os.remove(os.path.join(self.docs, "kept.txt"))
+
+        overview = catalog_service.project_overview(self.project_id)
+
+        self.assertEqual(overview["file_count"], 1)
+        self.assertEqual(overview["files"][0]["name"], "kept.txt")
+
 
 class IdentityTests(CatalogTestCase):
     def test_moving_a_file_into_a_subfolder_keeps_its_identity(self):

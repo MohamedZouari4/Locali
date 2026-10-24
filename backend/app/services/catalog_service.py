@@ -52,6 +52,23 @@ def catalog_project(project, report=None):
         "seconds": round(time.perf_counter() - started, 2),
     }
 
+def project_overview(project_id, max_files=100, recent_limit=10):
+    """Returns a compact overview of one project's catalog, or None if the project does not exist."""
+    project = database.get_project(project_id)
+    if project is None:
+        return None
+
+    overview = database.get_catalog_overview(
+        project_id,
+        max_files=max_files,
+        recent_limit=recent_limit,
+    )
+
+    return {
+        "project": project["name"],
+        "folders": [folder["path"] for folder in project["folders"]],
+        **overview,
+    }
 
 def apply_changes(project, paths):
     """Updates the project's catalog for the paths the file watcher reported, and returns the counts.
