@@ -8,6 +8,9 @@ text inside an indexed file must never be able to trigger a file operation. Each
 the model as JSON: the result, or an error with one of the fixed codes in app/tools/errors.py.
 The model's answer is returned with the sources it used, and whether it called any tools.
 `project_id` is the chat's project: project tools work on it, and only it, and aren't offered without one.
+
+Once a tool has returned text from the user's files (search_text), only read tools stay offered for the rest
+of the answer, including later calls in the same batch, for the same reason.
 """
 
 import json
@@ -79,17 +82,21 @@ def _chat_payload(messages, offered, stream):
 
 
 def _run_tool_calls(tool_calls, messages, offered, project_id=None):
-    # Runs each requested tool through the registry and appends its result to the messages.
-    offered_names = {card.name for card in offered}
+    # Runs each requested tool through the registry and appends its result to the messages. Returns the tools
+    # still offered: once a tool has put file content into the messages, only read tools stay.
     for call in tool_calls:
         name = call["function"]["name"]
         arguments = call["function"]["arguments"]
         if DEBUG:
             print(f"[DEBUG] Tool call requested: {name}({arguments})")
-        result = registry.run(name, arguments, offered_names, project_id)
+        cards = {card.name: card for card in offered}
+        result = registry.run(name, arguments, set(cards), project_id)
+        if result["ok"] and cards[name].returns_content:
+            offered = [card for card in offered if card.access == "read"]
         if DEBUG:
             print(f"[DEBUG] Tool call result: {result}")
         messages.append({"role": "tool", "content": json.dumps(result, ensure_ascii=False, default=str)})
+    return offered
 
 
 def ask(query, use_docs=False, project=None, project_id=None):
@@ -112,7 +119,7 @@ def ask(query, use_docs=False, project=None, project_id=None):
 
         used_tools = True
         messages.append(message)
-        _run_tool_calls(tool_calls, messages, offered, project_id)
+        offered = _run_tool_calls(tool_calls, messages, offered, project_id)
 
     return answer, sources, used_tools
 
@@ -152,7 +159,7 @@ def ask_stream(query, use_docs=False, project=None, project_id=None):
             break
 
         messages.append({"role": "assistant", "content": "".join(parts), "tool_calls": tool_calls})
-        _run_tool_calls(tool_calls, messages, offered, project_id)
+        offered = _run_tool_calls(tool_calls, messages, offered, project_id)
     else:
         # The loop ran out of rounds without a final answer.
         yield TokenEvent(text=answer)

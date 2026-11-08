@@ -77,6 +77,7 @@ def project_overview(project_id, max_files=100, recent_limit=10):
         **overview,
     }
 
+
 def find_files(project_id, name=None, extensions=None, min_size=None, max_size=None, changed=None, now=None):
     """The project's catalogued files matching every filter given, as {"total", "files"}: at most
     MAX_FOUND_FILES rows, most recently modified first, or None if the project doesn't exist.
@@ -108,6 +109,7 @@ def _period_start(period, now):
         "last_30_days": now - timedelta(days=30),
     }
     return starts[period].astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
 
 def apply_changes(project, paths):
     """Updates the project's catalog for the paths the file watcher reported, and returns the counts.

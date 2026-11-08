@@ -7,28 +7,42 @@ whatever their case, accents or Arabic letter forms. Words match in any order an
 a phrase. Each hit gives the file, the PDF page (None for other files, which are cached as one section) and
 a snippet of the original text with the matches marked **so**.
 
-Only text already in the cache is searched: a file that hasn't been read yet isn't found, and a file
-changed since its last read is found by its old text until it is read again. What the user types is
+Only text already in the cache is searched, so read_plain_text first reads the project's small plain-text
+files that aren't cached yet (code, Markdown, text, CSV: quick to read, no PDF parsing or OCR), within a
+short time budget. A PDF, Word file or image that hasn't been read yet isn't found, and a file changed
+since its last read is found by its old text until it is read again. Each hit also gives the line of the
+first match in a file cached as one section, so the Read file tool can open it there. What the user types is
 reduced to search terms, which hold only letters and digits, before it reaches FTS5, so AND, NEAR, * or a
 stray quote are searched for as words or dropped, never run as query syntax.
 """
 
+import logging
 import re
+import time
 
 from app.ai.ingestion.extractors import EXTRACTOR_VERSION
+from app.core import config
 from app.core.text_terms import terms, tokenize
 from app.db import database
+from app.services import text_cache_service
+
+log = logging.getLogger(__name__)
 
 # A "quoted phrase", or a run of anything but spaces.
 TERM_RE = re.compile(r'"([^"]*)"|(\S+)')
 MAX_HITS = 50
 # How many terms of text a snippet shows around the first match.
 SNIPPET_TERMS = 16
+# read_plain_text reads files of these types up to this size, for at most this long per search.
+PLAIN_TEXT_EXTENSIONS = config.CODE_EXTENSIONS | {"csv"}
+PLAIN_TEXT_MAX_BYTES = 1024 * 1024
+PLAIN_TEXT_BUDGET_SECONDS = 2.0
 
 
 def search(project_id, query, limit=20):
     """The project's best full-text hits for `query`, best first, as {"file_id", "name", "path", "page",
-    "snippet"}, at most `limit` of them (up to MAX_HITS). A query without words finds nothing."""
+    "line", "snippet"}, at most `limit` of them (up to MAX_HITS): `page` for a PDF, `line` (of the first
+    match) for every other file. A query without words finds nothing."""
     match = _match_expression(query)
     if not match:
         return []
@@ -40,10 +54,37 @@ def search(project_id, query, limit=20):
             "name": row["name"],
             "path": row["path"],
             "page": row["part"] if row["unit"] == "page" else None,
+            "line": _first_line(row["text"], wanted) if row["unit"] != "page" else None,
             "snippet": _snippet(row["text"], wanted),
         }
         for row in rows
     ]
+
+
+def read_plain_text(project_id, clock=time.monotonic):
+    """Reads the project's small plain-text files whose current text isn't cached yet into the cache, newest
+    first, until PLAIN_TEXT_BUDGET_SECONDS are spent. Returns how many were read. A file that can't be read is
+    left out; the search simply doesn't find it."""
+    deadline = clock() + PLAIN_TEXT_BUDGET_SECONDS
+    read = 0
+    files = database.list_uncached_files(EXTRACTOR_VERSION, PLAIN_TEXT_MAX_BYTES, PLAIN_TEXT_EXTENSIONS, (), 500, project_id)
+    for file in files:
+        if clock() >= deadline:
+            break
+        try:
+            text_cache_service.read_text(project_id, file["id"])
+            read += 1
+        except text_cache_service.TextUnavailable as error:
+            log.info("Not searched: %s", error)
+    return read
+
+
+def _first_line(text, wanted):
+    # The line number (from 1) of the first term of `text` the query asked for.
+    for term, start, _ in terms(text):
+        if term in wanted:
+            return text.count("\n", 0, start) + 1
+    return None
 
 
 def _match_expression(query):

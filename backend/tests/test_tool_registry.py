@@ -92,6 +92,7 @@ class LoadingTests(RegistryTestCase):
             _card("echo", "L0", output={}),
             _card("echo", "L0", required=("folder",)),
             _card("echo", "L0", parameters={"folder": {"type": "string"}}),
+            _card("echo", "L1", returns_content=True),
         ]
         for card in broken:
             with self.subTest(card=card), self.assertLogs("app.tools.registry", "WARNING"):
@@ -115,6 +116,7 @@ class OutputTests(RegistryTestCase):
             ("organize_by_extension", {"folder": "reports"}),
             ("project_overview", {}),
             ("find_files", {"extension": "txt"}),
+            ("search_text", {"query": "text"}),
         ]
         self.assertEqual({name for name, _ in calls}, ALL_TOOLS)
         python_types = {"array": list, "string": str, "object": dict}
@@ -221,12 +223,12 @@ class OfferTests(RegistryTestCase):
         self.assertEqual([card.risk for card in offered], ["L0", "L0", "L1", "L1", "L2", "L2"])
         self.assertEqual([card.name for card in offered][:2], ["tool4", "tool5"])
 
-    def test_over_the_cap_the_riskiest_tool_is_left_out(self):
-        """P1-E4-T3: seven tools and a cap of six, so the last L2 tool (organize_by_extension) isn't offered."""
+    def test_over_the_cap_the_riskiest_tools_are_left_out(self):
+        """P1-E4-T4: eight tools and a cap of six, so the two L2 tools (move_file, organize_by_extension) aren't offered."""
         offered = {card.name for card in registry.offer(MAX_TOOLS_PER_STEP, "project")}
 
         self.assertEqual(len(offered), MAX_TOOLS_PER_STEP)
-        self.assertEqual(ALL_TOOLS - offered, {"organize_by_extension"})
+        self.assertEqual(ALL_TOOLS - offered, {"move_file", "organize_by_extension"})
 
     def test_project_tools_are_offered_only_in_a_projects_chat(self):
         offered = {card.name for card in registry.offer(MAX_TOOLS_PER_STEP)}

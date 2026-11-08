@@ -589,19 +589,19 @@ def prune_text_cache():
         return conn.execute(_PRUNE_TEXT_CACHE).rowcount
 
 
-def list_uncached_files(extractor_version, max_size, extensions, skip_ids, limit):
-    """Catalogued files in any project whose current text isn't cached by this extractor version (never
-    read, or read by older readers), as [{"id", "project_id"}]: at most max_size bytes, with one of
-    `extensions`, not in skip_ids, most recently modified first."""
+def list_uncached_files(extractor_version, max_size, extensions, skip_ids, limit, project_id=None):
+    """Catalogued files whose current text isn't cached by this extractor version (never read, or read by
+    older readers), as [{"id", "project_id"}]: at most max_size bytes, with one of `extensions`, not in
+    skip_ids, most recently modified first. In every project, or only in `project_id` when given."""
     conn = get_connection()
     try:
         rows = conn.execute(
             "SELECT f.id, f.project_id FROM catalog_files f"
             " LEFT JOIN text_cache c ON c.content_hash = f.text_hash AND c.extension = f.extension AND c.extractor_version = ?"
             " WHERE c.id IS NULL AND f.size <= ? AND f.extension IN (SELECT value FROM json_each(?))"
-            " AND f.id NOT IN (SELECT value FROM json_each(?))"
+            " AND f.id NOT IN (SELECT value FROM json_each(?)) AND (? IS NULL OR f.project_id = ?)"
             " ORDER BY f.file_modified_at DESC, f.id LIMIT ?",
-            (extractor_version, max_size, json.dumps(sorted(extensions)), json.dumps(sorted(skip_ids)), limit),
+            (extractor_version, max_size, json.dumps(sorted(extensions)), json.dumps(sorted(skip_ids)), project_id, project_id, limit),
         ).fetchall()
         return [dict(row) for row in rows]
     finally:

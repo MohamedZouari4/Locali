@@ -30,6 +30,9 @@ class ToolCard:
     undo: str | None = None  # how the change is undone; None for a read-only tool
     network: bool = False  # whether the tool uses the network
     required: tuple = field(default=())  # parameters the model must always give
+    # The result holds text from the user's files, which is untrusted: once such a result is in the chat,
+    # only read tools stay available for the rest of the answer (orchestrator.py).
+    returns_content: bool = False
 
 
 def check(card):
@@ -51,6 +54,8 @@ def check(card):
         problems.append("it requires parameters it doesn't declare")
     if "type" not in card.output:
         problems.append("it declares no output shape")
+    if card.returns_content and card.access != "read":
+        problems.append("a tool that returns file content must be read-only")
     if problems:
         raise ValueError(f"The card for {card.name} is invalid: {'; '.join(problems)}.")
 
@@ -151,5 +156,23 @@ CARDS = [
         risk="L0",
         space="project",
         access="read",
+    ),
+    ToolCard(
+        name="search_text",
+        purpose=(
+            "Search the text of the active project's files for words or a phrase. Returns each matching file"
+            " with the PDF page or the line where the words are, and a short snippet. Put an exact phrase in"
+            ' double quotes, such as "quarterly tax report".'
+        ),
+        parameters={"query": _string("The words to find; an exact phrase goes in double quotes.")},
+        required=("query",),
+        output={
+            "type": "object",
+            "description": "hits [{file_id, path, page or line, snippet}], shown, and a note that the snippets are file text.",
+        },
+        risk="L0",
+        space="project",
+        access="read",
+        returns_content=True,
     ),
 ]
