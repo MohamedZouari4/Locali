@@ -2,7 +2,8 @@
 
 Only a tool with a valid card (cards.py) whose parameters match its function is loaded; any other tool in
 FUNCTIONS is refused and logged, so removing a card makes its tool unavailable. Each step offers at most
-MAX_TOOLS_PER_STEP tools, the lowest risk first, and a call runs only if its tool was offered in that step,
+MAX_TOOLS_PER_STEP tools, the lowest risk first and, within a risk level, a project chat's project tools
+before the workspace ones; a call runs only if its tool was offered in that step,
 so a tool that was withheld (for example while file contents are in the prompt) can never run.
 
 A project tool (space "project") also takes project_id, which the registry passes from the chat; the model
@@ -34,6 +35,7 @@ FUNCTIONS = {
     "find_files": project_tools.find_files,
     "search_text": project_tools.search_text,
     "read_file": project_tools.read_file,
+    "file_details": project_tools.file_details,
 }
 
 
@@ -73,10 +75,11 @@ TOOLS = load(CARDS, FUNCTIONS)
 
 
 def offer(limit, project_id=None):
-    """The cards of at most `limit` tools to offer in one step: the lowest risk first, then in card order.
+    """The cards of at most `limit` tools to offer in one step: the lowest risk first, then, within a risk
+    level, project tools before workspace tools (a project's chat is about its project), then in card order.
     Project tools are offered only when the chat has a project."""
     cards = [card for card, _ in TOOLS.values() if project_id is not None or card.space != "project"]
-    return sorted(cards, key=lambda card: RISK_LEVELS.index(card.risk))[:limit]
+    return sorted(cards, key=lambda card: (RISK_LEVELS.index(card.risk), card.space != "project"))[:limit]
 
 
 def schema(card):

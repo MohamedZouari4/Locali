@@ -543,7 +543,9 @@ def get_catalog_file(project_id, file_id):
     """One catalog row of the project, or None."""
     conn = get_connection()
     row = conn.execute(
-        "SELECT id, path, name, extension, text_hash FROM catalog_files WHERE id = ? AND project_id = ?", (file_id, project_id)
+        "SELECT id, path, name, extension, size, file_created_at, file_modified_at, catalogued_at, text_hash"
+        " FROM catalog_files WHERE id = ? AND project_id = ?",
+        (file_id, project_id),
     ).fetchone()
     conn.close()
     return dict(row) if row else None

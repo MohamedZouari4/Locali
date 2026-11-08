@@ -65,6 +65,12 @@ def _string(description):
 
 
 _MESSAGE = {"type": "string", "description": "A sentence saying what was done."}
+# A small model invents ids, so the cards steer it to the file's name and allow only an id a tool returned.
+_FILE_PATH = _string("The file's name, such as report.pdf, or its path. Use this unless you have a file_id.")
+_FILE_ID = {
+    "type": "integer",
+    "description": "Only an id that find_files or search_text returned; never guess one. Without one, give path.",
+}
 
 CARDS = [
     ToolCard(
@@ -179,12 +185,12 @@ CARDS = [
         name="read_file",
         purpose=(
             "Read one file of the active project: a page of a PDF, a section of a Markdown or Word file, or a"
-            " range of lines. Name the file by file_id (from find_files or search_text) or by path. Long parts come"
-            " back in pieces; the result says where to continue."
+            " range of lines. Name the file by path (its name alone is enough), or by a file_id that find_files or"
+            " search_text returned. Long parts come back in pieces; the result says where to continue."
         ),
         parameters={
-            "file_id": {"type": "integer", "description": "The file's id from find_files or search_text."},
-            "path": _string("The file's path or name, as project_overview or find_files show it, if you have no file_id."),
+            "path": _FILE_PATH,
+            "file_id": _FILE_ID,
             "page": {"type": "integer", "description": "For a PDF: the page to read, from 1."},
             "section": {"type": "integer", "description": "For Markdown or Word: the section to read, from 1."},
             "start_line": {"type": "integer", "description": "The first line to read, from 1 (within the page for a PDF)."},
@@ -193,6 +199,27 @@ CARDS = [
         output={
             "type": "object",
             "description": "text, the part read (page, section or lines), totals, next when more follows, and a file-content note.",
+        },
+        risk="L0",
+        space="project",
+        access="read",
+        returns_content=True,
+    ),
+    ToolCard(
+        name="file_details",
+        purpose=(
+            "Show one file of the active project: its size, type, when it was created and last changed, and how many"
+            " pages (PDF), sections (Markdown, Word) or lines it has. For an image, such as a screenshot or a scan,"
+            " it also returns the text in the image. Name the file by path (its name alone is enough), or by a file_id"
+            " that find_files or search_text returned."
+        ),
+        parameters={"path": _FILE_PATH, "file_id": _FILE_ID},
+        output={
+            "type": "object",
+            "description": (
+                "name, path, type, kind, size, created, modified, pages, sections or lines,"
+                " and for an image ocr_text with a file-content note."
+            ),
         },
         risk="L0",
         space="project",

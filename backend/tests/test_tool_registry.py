@@ -126,6 +126,7 @@ class OutputTests(RegistryTestCase):
             ("find_files", {"extension": "txt"}),
             ("search_text", {"query": "text"}),
             ("read_file", {"path": "empty.txt"}),
+            ("file_details", {"path": "empty.txt"}),
         ]
         self.assertEqual({name for name, _ in calls}, ALL_TOOLS)
         python_types = {"array": list, "string": str, "object": dict}
@@ -233,11 +234,12 @@ class OfferTests(RegistryTestCase):
         self.assertEqual([card.name for card in offered][:2], ["tool4", "tool5"])
 
     def test_over_the_cap_the_riskiest_tools_are_left_out(self):
-        """P1-E4-T5: nine tools and a cap of six, so only the six read tools are offered in a project's chat."""
+        """P1-E4-T6: ten tools and a cap of six. A project's chat gets its five project tools first, then the
+        first workspace read tool, so find_empty_files and the three tools that change files are left out."""
         offered = {card.name for card in registry.offer(MAX_TOOLS_PER_STEP, "project")}
 
         self.assertEqual(len(offered), MAX_TOOLS_PER_STEP)
-        self.assertEqual(ALL_TOOLS - offered, {"create_folder", "move_file", "organize_by_extension"})
+        self.assertEqual(ALL_TOOLS - offered, {"find_empty_files", "create_folder", "move_file", "organize_by_extension"})
 
     def test_project_tools_are_offered_only_in_a_projects_chat(self):
         offered = {card.name for card in registry.offer(MAX_TOOLS_PER_STEP)}
