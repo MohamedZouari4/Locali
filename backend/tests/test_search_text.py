@@ -1,5 +1,6 @@
-"""Tests for the search text tool (P1-E4-T4): a known phrase is found with its page; small plain-text files
-are searched even before anything read them, with the line of the match; hits are capped and marked as file
+"""Tests for the search text tool (P1-E4-T4): a known phrase is found with its page; small files (plain text,
+PDF, Word) are searched even before anything read them, with the page or line of the match, and the result
+says when some had to wait for lack of time; hits are capped and marked as file
 text; it only searches the chat's own project; and once its file text is in the chat, tools that change files
 are withheld for the rest of the answer. Uses a temporary database and folders. The last test asks the real
 chat model, so it is skipped without Ollama.
@@ -88,31 +89,40 @@ class AcceptanceTests(SearchTextTestCase):
         )
 
 
-class PlainTextTests(SearchTextTestCase):
-    def test_plain_text_files_are_searched_before_anything_read_them(self):
+class UnreadFileTests(SearchTextTestCase):
+    def test_small_files_are_searched_before_anything_read_them(self):
         _write(os.path.join(self.docs, "notes.md"), "# Notes\n\nMeeting moved.\nThe quarterly tax report is due Friday.\n")
-        _write_pdf(os.path.join(self.docs, "unread.pdf"), ["The quarterly tax report"])
+        _write_pdf(os.path.join(self.docs, "unread.pdf"), ["Cover", "The quarterly tax report"])
         self._scan()
 
-        hits = self._search('"quarterly tax report"')["result"]["hits"]
+        result = self._search('"quarterly tax report"')["result"]
 
-        self.assertEqual([(os.path.basename(hit["path"]), hit.get("line")) for hit in hits], [("notes.md", 4)])
+        found = sorted((os.path.basename(hit["path"]), hit.get("page"), hit.get("line")) for hit in result["hits"])
+        self.assertEqual(found, [("notes.md", None, 4), ("unread.pdf", 2, None)])
+        self.assertNotIn("not_searched_yet", result)
 
-    def test_large_plain_text_files_wait_for_a_real_read(self):
-        _write(os.path.join(self.docs, "big.txt"), "needle\n" + "x" * text_search_service.PLAIN_TEXT_MAX_BYTES)
+    def test_large_files_wait_for_a_real_read(self):
+        _write(os.path.join(self.docs, "big.txt"), "needle\n" + "x" * text_search_service.SMALL_FILE_MAX_BYTES)
         self._scan()
 
-        self.assertEqual(self._search("needle")["result"]["hits"], [])
+        result = self._search("needle")["result"]
 
-    def test_reading_stops_when_the_time_budget_is_spent(self):
+        self.assertEqual(result["hits"], [])
+        self.assertIn("files over 1 MB", result["note"])
+
+    def test_reading_stops_when_the_time_budget_is_spent_and_says_so(self):
         for n in range(3):
             _write(os.path.join(self.docs, f"part{n}.txt"), "needle")
         self._scan()
-        ticks = iter([0, 0, text_search_service.PLAIN_TEXT_BUDGET_SECONDS, 99, 99])
+        ticks = iter([0, 0, text_search_service.READ_BUDGET_SECONDS, 99, 99])
 
-        read = text_search_service.read_plain_text(self.project_id, clock=lambda: next(ticks))
+        reading = text_search_service.read_unread_files(self.project_id, clock=lambda: next(ticks))
+        with patch.object(text_search_service, "read_unread_files", return_value={"read": 0, "left": 2}):
+            result = self._search("needle")["result"]
 
-        self.assertEqual(read, 1)
+        self.assertEqual(reading, {"read": 1, "left": 2})
+        self.assertEqual(result["not_searched_yet"], 2)
+        self.assertIn("2 more files weren't read in time", result["note"])
 
 
 class ResultTests(SearchTextTestCase):
@@ -173,6 +183,8 @@ class UntrustedContentTests(SearchTextTestCase):
 
         with (
             patch.dict(registry.TOOLS, {"create_folder": (card, create_folder)}),
+            # Room for every tool, so create_folder is offered until the search result arrives.
+            patch.object(orchestrator, "MAX_TOOLS_PER_STEP", len(registry.TOOLS)),
             patch.object(orchestrator.requests, "post", side_effect=replies) as post,
         ):
             orchestrator.ask("what do my notes say about folders?", project_id=self.project_id)

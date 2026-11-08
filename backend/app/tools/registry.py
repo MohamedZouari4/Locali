@@ -33,6 +33,7 @@ FUNCTIONS = {
     "project_overview": project_tools.project_overview,
     "find_files": project_tools.find_files,
     "search_text": project_tools.search_text,
+    "read_file": project_tools.read_file,
 }
 
 

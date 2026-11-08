@@ -95,6 +95,18 @@ def find_files(project_id, name=None, extensions=None, min_size=None, max_size=N
     return {"total": len(rows), "files": rows[:MAX_FOUND_FILES]}
 
 
+def files_at(project_id, path):
+    """The project's catalogued files that `path` names, as [{"id", "path"}]: a full path, a path relative to
+    one of the project's folders, or a bare file name, ignoring case and / or \\. Usually one; several when a
+    bare name is shared, none when the catalog has no such file. Only catalogued files can match, so a path
+    outside the project's folders never does."""
+    wanted = path.strip().replace("\\", "/").strip("/").casefold()
+    if not wanted:
+        return []
+    rows = database.catalog_files_named(project_id, wanted.rsplit("/", 1)[-1])
+    return [row for row in rows if (slashed := row["path"].replace("\\", "/").casefold()) == wanted or slashed.endswith("/" + wanted)]
+
+
 def _period_start(period, now):
     # The period's start on the local clock (now is naive local time), as UTC in the catalog's timestamp format.
     # Naive datetimes are read as local time by astimezone, so a month that starts in another daylight-saving

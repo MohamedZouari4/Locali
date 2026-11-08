@@ -9,7 +9,7 @@ the model as JSON: the result, or an error with one of the fixed codes in app/to
 The model's answer is returned with the sources it used, and whether it called any tools.
 `project_id` is the chat's project: project tools work on it, and only it, and aren't offered without one.
 
-Once a tool has returned text from the user's files (search_text), only read tools stay offered for the rest
+Once a tool has returned text from the user's files (search_text, read_file), only read tools stay offered for the rest
 of the answer, including later calls in the same batch, for the same reason.
 """
 

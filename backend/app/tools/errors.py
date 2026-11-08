@@ -13,6 +13,8 @@ ERROR_CODES = {
     "outside_boundary": "That path is outside the folders Locali may use.",
     "too_large": "That file is too large to read.",
     "unsupported_type": "Locali can't read that type of file.",
+    "sensitive": "That file may hold keys or credentials, so Locali never opens it.",
+    "unreadable": "That file is damaged or can't be read.",
     "failed": "The tool failed unexpectedly.",
 }
 

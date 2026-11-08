@@ -11,9 +11,10 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from app.core import config
 from app.core.config import MAX_TOOLS_PER_STEP
 from app.db import database
-from app.services import tool_service
+from app.services import catalog_service, tool_service
 from app.tools import audit_log, file_tools, registry
 from app.tools.cards import CARDS, ToolCard
 from app.tools.errors import ERROR_CODES, ToolError
@@ -108,6 +109,13 @@ class OutputTests(RegistryTestCase):
         self._write("empty.txt")
         self._write("full.txt", "text")
         project_id = database.create_project("Project", folders=[(self.root, "read")])["id"]
+        # The temp folder may sit under AppData, which is never catalogued; read_file needs empty.txt catalogued.
+        with (
+            patch.object(config, "SYSTEM_EXCLUDE", [os.path.join(self.tmpdir, "Windows")]),
+            patch.object(config, "PRIVACY_EXCLUDE", []),
+            patch.object(config, "IGNORE_DIRS", {".git", "node_modules"}),
+        ):
+            catalog_service.catalog_project(database.get_project(project_id))
         calls = [
             ("list_files", {"path": "."}),
             ("find_empty_files", {"folder": "."}),
@@ -117,6 +125,7 @@ class OutputTests(RegistryTestCase):
             ("project_overview", {}),
             ("find_files", {"extension": "txt"}),
             ("search_text", {"query": "text"}),
+            ("read_file", {"path": "empty.txt"}),
         ]
         self.assertEqual({name for name, _ in calls}, ALL_TOOLS)
         python_types = {"array": list, "string": str, "object": dict}
@@ -224,11 +233,11 @@ class OfferTests(RegistryTestCase):
         self.assertEqual([card.name for card in offered][:2], ["tool4", "tool5"])
 
     def test_over_the_cap_the_riskiest_tools_are_left_out(self):
-        """P1-E4-T4: eight tools and a cap of six, so the two L2 tools (move_file, organize_by_extension) aren't offered."""
+        """P1-E4-T5: nine tools and a cap of six, so only the six read tools are offered in a project's chat."""
         offered = {card.name for card in registry.offer(MAX_TOOLS_PER_STEP, "project")}
 
         self.assertEqual(len(offered), MAX_TOOLS_PER_STEP)
-        self.assertEqual(ALL_TOOLS - offered, {"move_file", "organize_by_extension"})
+        self.assertEqual(ALL_TOOLS - offered, {"create_folder", "move_file", "organize_by_extension"})
 
     def test_project_tools_are_offered_only_in_a_projects_chat(self):
         offered = {card.name for card in registry.offer(MAX_TOOLS_PER_STEP)}

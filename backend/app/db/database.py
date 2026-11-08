@@ -486,6 +486,18 @@ def get_catalog_overview(project_id, max_files=200, recent_limit=10):
         conn.close()
 
 
+def catalog_files_named(project_id, name):
+    """The project's catalog rows ({"id", "path"}) whose file name is `name`, ignoring ASCII case."""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, path FROM catalog_files WHERE project_id = ? AND name = ? COLLATE NOCASE ORDER BY path", (project_id, name)
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
 def find_catalog_files(project_id, extensions=None, min_size=None, max_size=None, modified_since=None):
     """The project's catalogued files matching every filter given, most recently modified first: an extension
     in `extensions`, a size in bytes from min_size to max_size, modified at or after `modified_since` (UTC, in

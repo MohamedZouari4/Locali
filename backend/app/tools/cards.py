@@ -175,4 +175,28 @@ CARDS = [
         access="read",
         returns_content=True,
     ),
+    ToolCard(
+        name="read_file",
+        purpose=(
+            "Read one file of the active project: a page of a PDF, a section of a Markdown or Word file, or a"
+            " range of lines. Name the file by file_id (from find_files or search_text) or by path. Long parts come"
+            " back in pieces; the result says where to continue."
+        ),
+        parameters={
+            "file_id": {"type": "integer", "description": "The file's id from find_files or search_text."},
+            "path": _string("The file's path or name, as project_overview or find_files show it, if you have no file_id."),
+            "page": {"type": "integer", "description": "For a PDF: the page to read, from 1."},
+            "section": {"type": "integer", "description": "For Markdown or Word: the section to read, from 1."},
+            "start_line": {"type": "integer", "description": "The first line to read, from 1 (within the page for a PDF)."},
+            "end_line": {"type": "integer", "description": "The last line to read."},
+        },
+        output={
+            "type": "object",
+            "description": "text, the part read (page, section or lines), totals, next when more follows, and a file-content note.",
+        },
+        risk="L0",
+        space="project",
+        access="read",
+        returns_content=True,
+    ),
 ]

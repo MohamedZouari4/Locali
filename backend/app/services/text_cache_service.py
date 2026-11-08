@@ -25,7 +25,12 @@ from app.services import project_boundary, project_service
 
 
 class TextUnavailable(Exception):
-    """The file can't be read as text: it is gone, outside the project's folders, too large, unsafe or unsupported."""
+    """The file can't be read as text: it is gone, outside the project's folders, too large, unsafe or unsupported.
+    `code` says which, as one of the tools' fixed error codes (app/tools/errors.py)."""
+
+    def __init__(self, message, code="unreadable"):
+        super().__init__(message)
+        self.code = code
 
 
 def read_text(project_id, file_id):
@@ -37,13 +42,14 @@ def read_text(project_id, file_id):
     try:
         path, _folder = project_service.check_path(project_id, file["path"])
     except project_boundary.PathRefused as error:
-        raise TextUnavailable(str(error)) from None
+        raise TextUnavailable(str(error), "outside_boundary") from None
     if is_sensitive(file["name"]):  # the catalog skips these too; checked again in case the rules changed
-        raise TextUnavailable(f"{file['name']} may hold keys or credentials, so Locali never opens it.")
+        raise TextUnavailable(f"{file['name']} may hold keys or credentials, so Locali never opens it.", "sensitive")
     try:
         content_hash = _checked_hash(path, file)
     except OSError as error:
-        raise TextUnavailable(f"{file['name']} can't be read: {error.strerror or error}") from None
+        code = "not_found" if isinstance(error, FileNotFoundError) else "unreadable"
+        raise TextUnavailable(f"{file['name']} can't be read: {error.strerror or error}", code) from None
 
     # Recorded before the text is saved, so a prune running in between never removes it.
     database.set_catalog_text_hash(file["id"], content_hash)
@@ -61,10 +67,10 @@ def read_text(project_id, file_id):
 def _checked_hash(path, file):
     """The file's SHA-256, after the same size and file-type checks ingestion makes."""
     if os.path.getsize(path) > config.MAX_FILE_SIZE_MB * 1024 * 1024:
-        raise TextUnavailable(f"{file['name']} is larger than {config.MAX_FILE_SIZE_MB} MB.")
+        raise TextUnavailable(f"{file['name']} is larger than {config.MAX_FILE_SIZE_MB} MB.", "too_large")
     kind, safe = sniff_mime(path, file["extension"])
     if not safe:
-        raise TextUnavailable(f"{file['name']} doesn't look like a .{file['extension']} file (it reads as {kind}).")
+        raise TextUnavailable(f"{file['name']} doesn't look like a .{file['extension']} file (it reads as {kind}).", "unsupported_type")
     return file_hash(path)
 
 
@@ -74,7 +80,7 @@ def _extract(path, name):
     except Exception as error:  # a damaged file: each reader raises its own kind of error
         raise TextUnavailable(f"{name} can't be read: {error}") from None
     if extracted is None:
-        raise TextUnavailable(f"Locali can't read text from {name}.")
+        raise TextUnavailable(f"Locali can't read text from {name}.", "unsupported_type")
     unit, parts = extracted
     return unit, [redact_pii(part.encode("utf-8", "ignore").decode("utf-8"))[0] for part in parts]
 
