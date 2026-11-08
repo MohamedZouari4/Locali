@@ -455,25 +455,23 @@ def list_catalog_files(project_id, limit=1000, offset=0):
     conn.close()
     return [dict(row) for row in rows]
 
+
 def get_catalog_overview(project_id, max_files=200, recent_limit=10):
     """Returns a compact overview of one project's catalog without reading the filesystem."""
     conn = get_connection()
     try:
         files = conn.execute(
-            "SELECT path, name, extension, file_modified_at FROM catalog_files "
-            "WHERE project_id = ? ORDER BY path LIMIT ?",
+            "SELECT path, name, extension, file_modified_at FROM catalog_files WHERE project_id = ? ORDER BY path LIMIT ?",
             (project_id, max_files),
         ).fetchall()
 
         counts = conn.execute(
-            "SELECT extension, COUNT(*) AS count FROM catalog_files "
-            "WHERE project_id = ? GROUP BY extension ORDER BY count DESC, extension",
+            "SELECT extension, COUNT(*) AS count FROM catalog_files WHERE project_id = ? GROUP BY extension ORDER BY count DESC, extension",
             (project_id,),
         ).fetchall()
 
         recent = conn.execute(
-            "SELECT path, file_modified_at FROM catalog_files "
-            "WHERE project_id = ? ORDER BY file_modified_at DESC, path LIMIT ?",
+            "SELECT path, file_modified_at FROM catalog_files WHERE project_id = ? ORDER BY file_modified_at DESC, path LIMIT ?",
             (project_id, recent_limit),
         ).fetchall()
 
@@ -481,11 +479,39 @@ def get_catalog_overview(project_id, max_files=200, recent_limit=10):
             "files": [dict(row) for row in files],
             "by_type": {row["extension"] or "other": row["count"] for row in counts},
             "recent_changes": [dict(row) for row in recent],
-            "file_count": conn.execute(
-                "SELECT COUNT(*) FROM catalog_files WHERE project_id = ?", (project_id,)
-            ).fetchone()[0],
+            "file_count": conn.execute("SELECT COUNT(*) FROM catalog_files WHERE project_id = ?", (project_id,)).fetchone()[0],
             "truncated": len(files) == max_files,
         }
+    finally:
+        conn.close()
+
+
+def find_catalog_files(project_id, extensions=None, min_size=None, max_size=None, modified_since=None):
+    """The project's catalogued files matching every filter given, most recently modified first: an extension
+    in `extensions`, a size in bytes from min_size to max_size, modified at or after `modified_since` (UTC, in
+    the catalog's YYYY-MM-DD HH:MM:SS format)."""
+    clauses, params = ["project_id = ?"], [project_id]
+    if extensions:
+        clauses.append("extension IN (SELECT value FROM json_each(?))")
+        params.append(json.dumps(sorted(extensions)))
+    if min_size is not None:
+        clauses.append("size >= ?")
+        params.append(min_size)
+    if max_size is not None:
+        clauses.append("size <= ?")
+        params.append(max_size)
+    if modified_since is not None:
+        clauses.append("file_modified_at >= ?")
+        params.append(modified_since)
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, path, name, extension, size, file_modified_at FROM catalog_files WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY file_modified_at DESC, path",
+            params,
+        ).fetchall()
+        return [dict(row) for row in rows]
     finally:
         conn.close()
 

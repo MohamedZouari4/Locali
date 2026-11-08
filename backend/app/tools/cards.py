@@ -8,6 +8,8 @@ A card at L1 or above must say how the change is undone ("Irreversible" if it ca
 
 from dataclasses import dataclass, field
 
+from app.services.catalog_service import CHANGED_PERIODS
+
 RISK_LEVELS = ("L0", "L1", "L2", "L3", "L4")
 # Where a tool works. "workspace" is the ALLOWED_ROOT folder the file tools use until they move onto
 # project folders; "project" is a project's own folders.
@@ -113,16 +115,38 @@ CARDS = [
         access="act",
         undo="Move each file back to the folder.",
     ),
-        ToolCard(
+    ToolCard(
         name="project_overview",
         purpose="Summarize the active project's catalogued folder structure, file counts by type, and recent file changes.",
-        parameters={
-            "project_id": _string("The ID of the active project to summarize."),
-        },
-        required=("project_id",),
+        parameters={},
         output={
             "type": "object",
             "description": "A compact project overview containing folders, file structure, type counts and recent changes.",
+        },
+        risk="L0",
+        space="project",
+        access="read",
+    ),
+    ToolCard(
+        name="find_files",
+        purpose=(
+            "Find files in the active project's catalog by name, extension, size or when they last changed."
+            " Returns the most recently changed matches first, at most 20 of them, and how many match in total."
+        ),
+        parameters={
+            "name": _string("Part of the file name, or a pattern with * and ? such as report*.pdf. Case doesn't matter."),
+            "extension": _string("File extension without the dot, such as pdf; several separated by commas, such as docx, xlsx."),
+            "larger_than_mb": {"type": "number", "description": "Only files larger than this many megabytes."},
+            "smaller_than_mb": {"type": "number", "description": "Only files smaller than this many megabytes."},
+            "changed": {
+                "type": "string",
+                "enum": list(CHANGED_PERIODS),
+                "description": "Only files changed in this period, counted back from now on the user's clock.",
+            },
+        },
+        output={
+            "type": "object",
+            "description": "total, shown, files [{id, path, size, modified}], and a note when more files match than are shown.",
         },
         risk="L0",
         space="project",

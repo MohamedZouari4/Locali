@@ -113,14 +113,15 @@ class OutputTests(RegistryTestCase):
             ("create_folder", {"path": "reports"}),
             ("move_file", {"src": "full.txt", "dst": "reports/full.txt"}),
             ("organize_by_extension", {"folder": "reports"}),
-            ("project_overview", {"project_id": project_id}),
+            ("project_overview", {}),
+            ("find_files", {"extension": "txt"}),
         ]
         self.assertEqual({name for name, _ in calls}, ALL_TOOLS)
         python_types = {"array": list, "string": str, "object": dict}
         for name, arguments in calls:
             with self.subTest(name):
                 card, _ = registry.TOOLS[name]
-                result = registry.run(name, arguments, ALL_TOOLS)
+                result = registry.run(name, arguments, ALL_TOOLS, project_id)
                 self.assertTrue(result["ok"], result)
                 self.assertIsInstance(result["result"], python_types[card.output["type"]])
                 if card.output["type"] == "array":
@@ -129,10 +130,21 @@ class OutputTests(RegistryTestCase):
     def test_project_overview_is_read_only_and_returns_an_object(self):
         project_id = database.create_project("Project", folders=[(self.root, "read")])["id"]
 
-        result = registry.run("project_overview", {"project_id": project_id}, ALL_TOOLS)
+        result = registry.run("project_overview", {}, ALL_TOOLS, project_id)
 
         self.assertTrue(result["ok"], result)
         self.assertIsInstance(result["result"], dict)
+
+    def test_the_model_cant_choose_the_project(self):
+        project_id = database.create_project("Project", folders=[(self.root, "read")])["id"]
+
+        chosen_by_model = registry.run("project_overview", {"project_id": "other"}, ALL_TOOLS, project_id)
+        without_project = registry.run("project_overview", {}, ALL_TOOLS)
+
+        self.assertEqual(chosen_by_model["error"]["code"], "invalid_arguments")
+        self.assertEqual(without_project["error"]["code"], "not_available")
+        self.assertNotIn("project_overview", {card.name for card in registry.offer(MAX_TOOLS_PER_STEP)})
+        self.assertIn("project_overview", {card.name for card in registry.offer(MAX_TOOLS_PER_STEP, project_id)})
 
 
 class ErrorCodeTests(RegistryTestCase):
@@ -209,9 +221,18 @@ class OfferTests(RegistryTestCase):
         self.assertEqual([card.risk for card in offered], ["L0", "L0", "L1", "L1", "L2", "L2"])
         self.assertEqual([card.name for card in offered][:2], ["tool4", "tool5"])
 
-    def test_today_every_tool_fits_in_one_step(self):
-        self.assertLessEqual(len(registry.TOOLS), MAX_TOOLS_PER_STEP)
-        self.assertEqual({card.name for card in registry.offer(MAX_TOOLS_PER_STEP)}, ALL_TOOLS)
+    def test_over_the_cap_the_riskiest_tool_is_left_out(self):
+        """P1-E4-T3: seven tools and a cap of six, so the last L2 tool (organize_by_extension) isn't offered."""
+        offered = {card.name for card in registry.offer(MAX_TOOLS_PER_STEP, "project")}
+
+        self.assertEqual(len(offered), MAX_TOOLS_PER_STEP)
+        self.assertEqual(ALL_TOOLS - offered, {"organize_by_extension"})
+
+    def test_project_tools_are_offered_only_in_a_projects_chat(self):
+        offered = {card.name for card in registry.offer(MAX_TOOLS_PER_STEP)}
+
+        self.assertNotIn("project_overview", offered)
+        self.assertNotIn("find_files", offered)
 
 
 if __name__ == "__main__":

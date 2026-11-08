@@ -7,6 +7,7 @@ When file contents are in the prompt, no tools are offered, and the registry run
 text inside an indexed file must never be able to trigger a file operation. Each tool result reaches
 the model as JSON: the result, or an error with one of the fixed codes in app/tools/errors.py.
 The model's answer is returned with the sources it used, and whether it called any tools.
+`project_id` is the chat's project: project tools work on it, and only it, and aren't offered without one.
 """
 
 import json
@@ -47,8 +48,7 @@ def build_context(query, k=4, project=None):
     return context_block, sources
 
 
-
-def _build_messages(query, use_docs, project, project_id):
+def _build_messages(query, use_docs, project):
     # Returns the chat history to send to the model and the sources used to build the context.
     sources = []
     if use_docs:
@@ -56,8 +56,6 @@ def _build_messages(query, use_docs, project, project_id):
         prompt = build_prompt(query, context_block)
     else:
         prompt = query
-    if project_id:
-        prompt = f"Active project ID: {project_id}\n\n{prompt}"
     if DEBUG:
         print(f"\n[DEBUG] Final prompt sent to model:\n{prompt[:1000]}\n")
 
@@ -68,9 +66,9 @@ def _build_messages(query, use_docs, project, project_id):
     return messages, sources
 
 
-def _offered_tools(sources):
+def _offered_tools(sources, project_id):
     # The tool cards to offer: none while retrieved file contents are in the prompt.
-    return [] if sources else registry.offer(MAX_TOOLS_PER_STEP)
+    return [] if sources else registry.offer(MAX_TOOLS_PER_STEP, project_id)
 
 
 def _chat_payload(messages, offered, stream):
@@ -80,7 +78,7 @@ def _chat_payload(messages, offered, stream):
     return payload
 
 
-def _run_tool_calls(tool_calls, messages, offered):
+def _run_tool_calls(tool_calls, messages, offered, project_id=None):
     # Runs each requested tool through the registry and appends its result to the messages.
     offered_names = {card.name for card in offered}
     for call in tool_calls:
@@ -88,16 +86,15 @@ def _run_tool_calls(tool_calls, messages, offered):
         arguments = call["function"]["arguments"]
         if DEBUG:
             print(f"[DEBUG] Tool call requested: {name}({arguments})")
-        result = registry.run(name, arguments, offered_names)
+        result = registry.run(name, arguments, offered_names, project_id)
         if DEBUG:
             print(f"[DEBUG] Tool call result: {result}")
         messages.append({"role": "tool", "content": json.dumps(result, ensure_ascii=False, default=str)})
 
 
-
 def ask(query, use_docs=False, project=None, project_id=None):
-    messages, sources = _build_messages(query, use_docs, project, project_id)
-    offered = _offered_tools(sources)
+    messages, sources = _build_messages(query, use_docs, project)
+    offered = _offered_tools(sources, project_id)
     used_tools = False
     answer = TOOL_LIMIT_MESSAGE
     for _ in range(MAX_TOOL_ROUNDS):
@@ -115,7 +112,7 @@ def ask(query, use_docs=False, project=None, project_id=None):
 
         used_tools = True
         messages.append(message)
-        _run_tool_calls(tool_calls, messages, offered)
+        _run_tool_calls(tool_calls, messages, offered, project_id)
 
     return answer, sources, used_tools
 
@@ -123,8 +120,8 @@ def ask(query, use_docs=False, project=None, project_id=None):
 def ask_stream(query, use_docs=False, project=None, project_id=None):
     # Same as ask(), but yields the answer token by token, then an event with the sources.
     # The caller saves the reply and ends the stream with a done event.
-    messages, sources = _build_messages(query, use_docs, project, project_id)
-    offered = _offered_tools(sources)
+    messages, sources = _build_messages(query, use_docs, project)
+    offered = _offered_tools(sources, project_id)
     answer = TOOL_LIMIT_MESSAGE
     for _ in range(MAX_TOOL_ROUNDS):
         tool_calls = []
@@ -155,7 +152,7 @@ def ask_stream(query, use_docs=False, project=None, project_id=None):
             break
 
         messages.append({"role": "assistant", "content": "".join(parts), "tool_calls": tool_calls})
-        _run_tool_calls(tool_calls, messages, offered)
+        _run_tool_calls(tool_calls, messages, offered, project_id)
     else:
         # The loop ran out of rounds without a final answer.
         yield TokenEvent(text=answer)

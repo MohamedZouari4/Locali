@@ -10,14 +10,20 @@ After a full scan, cached text that no catalog file was last read from is pruned
 Importing this module registers the `catalog` job kind; app/api/main.py imports it through the routers.
 """
 
+import fnmatch
 import threading
 import time
+from datetime import UTC, datetime, timedelta
 
 from app.catalog import scanner
 from app.db import database
 from app.jobs import worker
 
 CATALOG_KIND = "catalog"
+# find_files returns at most this many files, with the total count, so a broad search stays short for the model.
+MAX_FOUND_FILES = 20
+# The periods find_files can limit a search to, on the user's local clock.
+CHANGED_PERIODS = ("today", "this_week", "this_month", "this_year", "last_7_days", "last_30_days")
 
 
 # Held from reading the records to saving the changes, so a scan and the watcher never match against
@@ -52,6 +58,7 @@ def catalog_project(project, report=None):
         "seconds": round(time.perf_counter() - started, 2),
     }
 
+
 def project_overview(project_id, max_files=100, recent_limit=10):
     """Returns a compact overview of one project's catalog, or None if the project does not exist."""
     project = database.get_project(project_id)
@@ -69,6 +76,38 @@ def project_overview(project_id, max_files=100, recent_limit=10):
         "folders": [folder["path"] for folder in project["folders"]],
         **overview,
     }
+
+def find_files(project_id, name=None, extensions=None, min_size=None, max_size=None, changed=None, now=None):
+    """The project's catalogued files matching every filter given, as {"total", "files"}: at most
+    MAX_FOUND_FILES rows, most recently modified first, or None if the project doesn't exist.
+
+    `name` matches the file name, ignoring case in any script: a pattern with * or ? must match the whole name,
+    anything else is found anywhere in it. `changed` is one of CHANGED_PERIODS; `now` is for tests.
+    """
+    if database.get_project(project_id) is None:
+        return None
+    since = _period_start(changed, now or datetime.now()) if changed else None
+    rows = database.find_catalog_files(project_id, extensions, min_size, max_size, since)
+    if name:
+        pattern = name.casefold() if any(char in name for char in "*?[") else f"*{name.casefold()}*"
+        rows = [row for row in rows if fnmatch.fnmatchcase(row["name"].casefold(), pattern)]
+    return {"total": len(rows), "files": rows[:MAX_FOUND_FILES]}
+
+
+def _period_start(period, now):
+    # The period's start on the local clock (now is naive local time), as UTC in the catalog's timestamp format.
+    # Naive datetimes are read as local time by astimezone, so a month that starts in another daylight-saving
+    # offset still starts at local midnight.
+    today = datetime(now.year, now.month, now.day)
+    starts = {
+        "today": today,
+        "this_week": today - timedelta(days=today.weekday()),
+        "this_month": today.replace(day=1),
+        "this_year": today.replace(month=1, day=1),
+        "last_7_days": now - timedelta(days=7),
+        "last_30_days": now - timedelta(days=30),
+    }
+    return starts[period].astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
 def apply_changes(project, paths):
     """Updates the project's catalog for the paths the file watcher reported, and returns the counts.

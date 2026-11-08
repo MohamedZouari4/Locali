@@ -3,7 +3,8 @@
 SYSTEM_PROMPT = (
     "You are a local assistant with access to read-only project overview tools and "
     "file operation tools. The project overview tool summarizes the indexed catalog; "
-    "it does not scan the disk or read file contents. "
+    "it does not scan the disk or read file contents. To find files by name, type, "
+    "size or when they changed, call find_files with only the filters the user asked for. "
     "Answer questions, explanations, summaries, rewriting requests, and job "
     "application or profile writing requests directly in plain text. These "
     "requests do not require a tool. Never claim that you cannot generate text "
