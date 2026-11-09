@@ -18,9 +18,17 @@ class TermTests(unittest.TestCase):
         self.assertEqual(tokenize("The Quarterly tax_report, v2!"), ["the", "quarterly", "tax", "report", "v2"])
 
     def test_arabic_marks_and_letter_forms_are_folded(self):
-        self.assertEqual(tokenize("اَلْمُدِيرُ أحمد"), ["المدير", "احمد"])
+        self.assertEqual(tokenize("اَلْمُدِيرُ أحمد"), ["مدير", "احمد"])
         self.assertEqual(tokenize("إلى آخر مدرسة"), tokenize("الي اخر مدرسه"))
         self.assertEqual(tokenize("كتـــاب ٢٠٢٦"), ["كتاب", "2026"])
+
+    def test_an_arabic_word_loses_its_article_and_prefixes(self):
+        """The LangGraph spike's search for الحرارة missed للحرارة: both now give the same term."""
+        self.assertEqual(tokenize("الحرارة للحرارة والحرارة بالحرارة"), ["حراره"] * 4)
+        self.assertEqual(tokenize("الميزانيّة والميزانية"), ["ميزانيه", "ميزانيه"])
+
+    def test_a_short_arabic_word_keeps_its_letters(self):
+        self.assertEqual(tokenize("الي ولد وقت كتاب"), ["الي", "ولد", "وقت", "كتاب"])
 
     def test_other_scripts_keep_whole_words(self):
         self.assertEqual(len(tokenize("हिंदी भाषा")), 2)

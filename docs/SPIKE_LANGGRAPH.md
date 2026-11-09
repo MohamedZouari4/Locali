@@ -3,8 +3,9 @@
 Date: 2026-11-09 · Commits: `27532a9` (harness), runs on `8662383` · Ollama: 0.20.3 · Hardware: i7-12650H,
 24 GB RAM, RTX 3050 Laptop 6 GB
 
-> **Draft recommendation.** The runs are finished and every wrong answer was read by hand. The decision is the
-> maintainer's; record it in the Decision Log, then tick this ticket's last box.
+> **Decided 2026-11-09** (Notion Decision Log): keep today's plain loop and `qwen3:4b-instruct` for Phase 1, and
+> revisit LangGraph for Phase 2 approvals. The fixes the spike pointed to were made the same day; their effect
+> is under "After the fixes" below.
 
 ## Question
 
@@ -70,7 +71,33 @@ process connected anywhere but this machine (603 samples over about 12 minutes).
 Scoring was too strict in one place only: question 13 failed because the model typed the file name wrong
 (`meeting-2026-10--02.md`), which is a real failure, not a scorer error. No question was re-scored.
 
-## Recommendation (draft)
+## After the fixes
+
+The same 30 questions on the default model with today's loop (the `plain` engine routes each question as the chat
+service does). One run each.
+
+| Stage | Two tools | Six tools | Facts to find | Arabic, French | Planted instruction | Median s (two / six) |
+| --- | --- | --- | --- | --- | --- | --- |
+| Before | 11/30 | 15/30 | 0/10 | 1/3 | 0/2 | 5.0 / 6.9 |
+| Looser `search_text` + prompt rule | 15/30 | 16/30 | 1/10 | 2/3 | 1/2 · 0/2 | 6.7 / 6.9 |
+| + router, search before answering, question repeated after file text | 19/30 | 20/30 | 7/10 | 3/3 | 1/2 · 2/2 | 12.1 / 37.2 |
+
+`search_text` now matches word beginnings, falls back to pages with some of the words, and matches Arabic words
+with a prefix (P1-E4-T7). A project question or multi-step task gets a `search_text` of the question before the
+model's first turn, and the question is repeated after file text (P1-E5-T3 wiring, P1-E5-T9).
+
+Still wrong, read by hand:
+
+- **Named reads got worse (2/6).** "Read page 3 of q3-report.pdf" is searched first, and the model answers from the
+  snippets instead of calling `read_file`. Skip the search when the question names a file and a page or section.
+- **Snippets start at common words.** The question's own words include "the", so a snippet reads "We move **the**
+  launch to 15…" and cuts off the fact. Drop common words from the search-first query.
+- **Slower.** The median rose to 12 s with two tools and 37 s with six: about ten snippets now reach the prompt,
+  plus the router call. This needs measuring before the change is used day to day.
+- **Router misses.** Three fact questions ("Which sensor fails in heavy rain?" and two more) were routed as
+  general chat, so they weren't searched.
+
+## Recommendation
 
 - **Engine: keep today's plain loop for Phase 1.** LangGraph scored the same, and it brings about 20 packages
   (LangChain core, LangSmith client) that must be kept from phoning home. What it would add is checkpoints and

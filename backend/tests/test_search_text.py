@@ -137,6 +137,15 @@ class ResultTests(SearchTextTestCase):
         self.assertTrue(result["note"].startswith(UNTRUSTED_NOTE))
         self.assertIn("more specific words", result["note"])
 
+    def test_a_partial_match_says_so(self):
+        _write(os.path.join(self.docs, "notes.txt"), "Karim owns the dashboard.")
+        self._scan()
+
+        result = self._search("dashboard owner")["result"]
+
+        self.assertEqual(result["shown"], 1)
+        self.assertIn("only some of them", result["note"])
+
     def test_queries_it_cant_use_are_refused_or_find_nothing(self):
         for query in ("", "   ", None, 5):
             with self.subTest(query=query):

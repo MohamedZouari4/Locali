@@ -64,15 +64,15 @@ def search_text(project_id, query):
     if database.get_project(project_id) is None:
         raise ToolError("not_found", "This project no longer exists.")
     reading = text_search_service.read_unread_files(project_id)
-    hits = [
-        {"file_id": hit["file_id"], "path": hit["path"], **_location(hit), "snippet": hit["snippet"]}
-        for hit in text_search_service.search(project_id, query, limit=SEARCH_HITS)
-    ]
+    found = text_search_service.search(project_id, query, limit=SEARCH_HITS)
+    hits = [{"file_id": hit["file_id"], "path": hit["path"], **_location(hit), "snippet": hit["snippet"]} for hit in found]
     result = {"hits": hits, "shown": len(hits), "note": UNTRUSTED_NOTE}
     if not hits:
         result["note"] = (
             "Nothing matches in the text Locali has read. Images and files over 1 MB are only searched once read_file has read them."
         )
+    elif not found[0]["all_words"]:
+        result["note"] += " No page or file holds all the words, so these hold only some of them; read them to check."
     elif len(hits) == SEARCH_HITS:
         result["note"] += f" Only the best {SEARCH_HITS} are shown; more specific words narrow the search."
     if reading["left"]:

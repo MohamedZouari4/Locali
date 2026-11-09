@@ -4,7 +4,12 @@ The index is SQLite's built-in FTS5 (the text_search table), which triggers keep
 so text can be found as soon as it is cached and is gone once it is pruned. The index holds each part's
 search terms (app/core/text_terms.py), the same terms keyword search uses, so words match in any script,
 whatever their case, accents or Arabic letter forms. Words match in any order and "quoted words" match as
-a phrase. Each hit gives the file, the PDF page (None for other files, which are cached as one section) and
+a phrase. A word of three or more letters also matches longer words it begins (risk finds Risks), since a
+question rarely uses the document's exact form. The words are first looked for together in one part (a PDF
+page, or a whole other file); when no part holds them all, the parts holding any of them are returned, best
+first, and each hit says so (all_words False), because a model asking "Greenhouse budget" usually wants the
+budget page even when "Greenhouse" is on another one. A "quoted phrase" is always required.
+Each hit gives the file, the PDF page (None for other files, which are cached as one section) and
 a snippet of the original text with the matches marked **so**.
 
 Only text already in the cache is searched, so read_unread_files first reads the project's small files that
@@ -31,6 +36,8 @@ log = logging.getLogger(__name__)
 # A "quoted phrase", or a run of anything but spaces.
 TERM_RE = re.compile(r'"([^"]*)"|(\S+)')
 MAX_HITS = 50
+# A word of at least this many letters also matches longer words that begin with it; shorter ones match whole.
+MIN_PREFIX_CHARS = 3
 # How many terms of text a snippet shows around the first match.
 SNIPPET_TERMS = 16
 # read_unread_files reads files of these types up to this size, for at most this long per search.
@@ -41,21 +48,27 @@ READ_BUDGET_SECONDS = 2.0
 
 def search(project_id, query, limit=20):
     """The project's best full-text hits for `query`, best first, as {"file_id", "name", "path", "page",
-    "line", "snippet"}, at most `limit` of them (up to MAX_HITS): `page` for a PDF, `line` (of the first
-    match) for every other file. A query without words finds nothing."""
-    match = _match_expression(query)
-    if not match:
+    "line", "snippet", "all_words"}, at most `limit` of them (up to MAX_HITS): `page` for a PDF, `line` (of
+    the first match) for every other file, and `all_words` False when no part held every word, so these
+    hold only some of them. A query without words finds nothing."""
+    all_words, some_words = _match_expressions(query)
+    if not all_words:
         return []
-    rows = database.search_text(project_id, match, EXTRACTOR_VERSION, max(1, min(limit, MAX_HITS)))
-    wanted = set(tokenize(query))
+    count = max(1, min(limit, MAX_HITS))
+    rows = database.search_text(project_id, all_words, EXTRACTOR_VERSION, count)
+    complete = bool(rows) or some_words is None
+    if not complete:
+        rows = database.search_text(project_id, some_words, EXTRACTOR_VERSION, count)
+    matches = _matcher(query)
     return [
         {
             "file_id": row["file_id"],
             "name": row["name"],
             "path": row["path"],
             "page": row["part"] if row["unit"] == "page" else None,
-            "line": _first_line(row["text"], wanted) if row["unit"] != "page" else None,
-            "snippet": _snippet(row["text"], wanted),
+            "line": _first_line(row["text"], matches) if row["unit"] != "page" else None,
+            "snippet": _snippet(row["text"], matches),
+            "all_words": complete,
         }
         for row in rows
     ]
@@ -80,26 +93,50 @@ def read_unread_files(project_id, clock=time.monotonic):
     return {"read": read, "left": len(files) - tried}
 
 
-def _first_line(text, wanted):
+def _first_line(text, matches):
     # The line number (from 1) of the first term of `text` the query asked for.
     for term, start, _ in terms(text):
-        if term in wanted:
+        if matches(term):
             return text.count("\n", 0, start) + 1
     return None
 
 
-def _match_expression(query):
-    """The query in FTS5 syntax: the search terms of every word and "quoted phrase", each quoted as a phrase
-    so it must appear."""
-    phrases = [tokenize(phrase or word) for phrase, word in TERM_RE.findall(query)]
-    return " ".join('"' + " ".join(phrase) + '"' for phrase in phrases if phrase)
+def _match_expressions(query):
+    """The query in FTS5 syntax as (all_words, some_words). A "quoted phrase", and a word that splits into several
+    terms (tax_report, pump.py, or Chinese), is searched as a phrase. Every other word is one term, which also
+    matches as the start of a longer term when it has MIN_PREFIX_CHARS letters. all_words needs every word and
+    phrase. some_words needs every quoted phrase and any one of the rest; a file name is one of the rest, since a
+    file's name is rarely in its text. some_words is None when it would be the same query or match nothing new."""
+    quoted, loose = [], []
+    for phrase, word in TERM_RE.findall(query):
+        found = tokenize(phrase or word)
+        if not found:
+            continue
+        if phrase or len(found) > 1:
+            (quoted if phrase else loose).append('"' + " ".join(found) + '"')
+        else:
+            loose.append(f'"{found[0]}"' + ("*" if len(found[0]) >= MIN_PREFIX_CHARS else ""))
+    all_words = " ".join(quoted + loose)
+    if len(loose) > 1:
+        # FTS5 needs AND spelled out before a bracketed group.
+        some_words = " AND ".join([*quoted, "(" + " OR ".join(loose) + ")"])
+    else:
+        some_words = " ".join(quoted) if quoted and loose else None
+    return all_words, some_words
 
 
-def _snippet(text, wanted):
+def _matcher(query):
+    """A test for a term of the text: is it one the query asked for, or a longer term one of them begins?"""
+    wanted = set(tokenize(query))
+    prefixes = tuple(term for term in wanted if len(term) >= MIN_PREFIX_CHARS)
+    return lambda term: term in wanted or term.startswith(prefixes)
+
+
+def _snippet(text, matches):
     """Up to SNIPPET_TERMS terms of `text` from just before its first match, with each run of matching terms
     between ** marks and … where text was cut. The text is shown as written, not as folded terms."""
     found = terms(text)
-    hits = [index for index, (term, _, _) in enumerate(found) if term in wanted]
+    hits = [index for index, (term, _, _) in enumerate(found) if matches(term)]
     if not hits:
         return ""
     first = max(0, min(hits[0] - SNIPPET_TERMS // 4, len(found) - SNIPPET_TERMS))
@@ -109,12 +146,12 @@ def _snippet(text, wanted):
     pieces, cursor = [], start
     for index in range(first, last + 1):
         term, term_start, term_end = found[index]
-        if term not in wanted:
+        if not matches(term):
             continue
-        if index == first or found[index - 1][0] not in wanted:
+        if index == first or not matches(found[index - 1][0]):
             pieces += [text[cursor:term_start], "**"]
             cursor = term_start
-        if index == last or found[index + 1][0] not in wanted:
+        if index == last or not matches(found[index + 1][0]):
             pieces += [text[cursor:term_end], "**"]
             cursor = term_end
     pieces.append(text[cursor:end])

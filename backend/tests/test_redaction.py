@@ -107,7 +107,7 @@ class ModelContextTestCase(unittest.TestCase):
         """Whether the full-text index holds these words, in any file and version."""
         conn = database.get_connection()
         try:
-            match = text_search_service._match_expression(words)
+            match, _some_words = text_search_service._match_expressions(words)
             return conn.execute("SELECT COUNT(*) FROM text_search WHERE text_search MATCH ?", (match,)).fetchone()[0] > 0
         finally:
             conn.close()

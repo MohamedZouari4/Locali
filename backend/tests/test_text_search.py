@@ -138,6 +138,56 @@ class IndexFollowsCacheTests(TextSearchTestCase):
         self.assertEqual(self._found('"poste resume"'), [])
 
 
+class LooseMatchTests(TextSearchTestCase):
+    """The LangGraph spike (P1-E5-T1): models search with their own words, so exact whole-word matching on one
+    page missed facts that were in the files."""
+
+    def test_a_word_finds_longer_words_it_begins(self):
+        _write_pdf(os.path.join(self.docs, "report.pdf"), ["Introduction", "Risks: sensor 7 fails in heavy rain."])
+        self._read_all()
+
+        self.assertEqual(self._found("risk"), [("report.pdf", 2)])
+        self.assertEqual(text_search_service.search(self.project_id, "risk")[0]["snippet"], "**Risks**: sensor 7 fails in heavy rain.")
+
+    def test_without_a_page_holding_every_word_the_pages_holding_some_are_found(self):
+        _write_pdf(os.path.join(self.docs, "report.pdf"), ["Greenhouse Q3 report", "The quarterly budget is 48,500 TND."])
+        self._read_all()
+
+        hits = text_search_service.search(self.project_id, "Greenhouse budget")
+
+        self.assertEqual(sorted(hit["page"] for hit in hits), [1, 2])
+        self.assertFalse(hits[0]["all_words"])
+        self.assertTrue(text_search_service.search(self.project_id, "quarterly budget")[0]["all_words"])
+
+    def test_a_quoted_phrase_stays_required_when_the_other_words_are_loosened(self):
+        _write(os.path.join(self.docs, "a.txt"), "the tax report is late")
+        _write(os.path.join(self.docs, "b.txt"), "the budget is late")
+        self._read_all()
+
+        self.assertEqual(self._found('"tax report" budget'), [("a.txt", None)])
+        self.assertEqual(self._found('"report tax"'), [])
+
+    def test_a_question_with_a_file_name_and_several_words_is_searched(self):
+        """A file name becomes a phrase; with several loose words the fallback once failed with an FTS5 syntax error."""
+        _write(os.path.join(self.docs, "setup.txt"), "Set the reading interval to 15 minutes in config.ini.")
+        self._read_all()
+
+        self.assertEqual(self._found("What reading interval should be set in config.ini?"), [("setup.txt", None)])
+        self.assertEqual(self._found("Which interval does config.ini use for sensors?"), [("setup.txt", None)])
+
+    def test_a_file_name_in_the_question_is_not_required_in_the_text(self):
+        _write(os.path.join(self.docs, "pump.txt"), "def start_pump(seconds=90): starts the backup pump")
+        self._read_all()
+
+        self.assertEqual(self._found("What does the function in pump.py do?"), [("pump.txt", None)])
+
+    def test_an_arabic_word_finds_it_with_a_prefix(self):
+        _write(os.path.join(self.docs, "ideas.txt"), "فكرة: إضافة حساس للحرارة في البيت البلاستيكي.")
+        self._read_all()
+
+        self.assertEqual(self._found("الحرارة"), [("ideas.txt", None)])
+
+
 class ScopeTests(TextSearchTestCase):
     def test_another_projects_files_are_not_found(self):
         other_docs = os.path.join(self.tmpdir, "taxes")

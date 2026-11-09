@@ -82,7 +82,11 @@ async def chat_stream(websocket: WebSocket):
         conversation_id, reply_id = await asyncio.to_thread(
             chat_service.begin_turn, request.project_id, request.conversation_id, request.message
         )
-        events = ask_stream(request.message, use_docs=use_docs, project=request.project, project_id=request.project_id, history=history)
+        # Routed after the question is saved, since routing is already a call to the model.
+        route = await asyncio.to_thread(chat_service.route, request.message, use_docs)
+        events = ask_stream(
+            request.message, use_docs=use_docs, project=request.project, project_id=request.project_id, history=history, route=route
+        )
         # Each next() on the generator runs in a worker thread so the server isn't blocked.
         async for event in iterate_in_threadpool(events):
             if isinstance(event, TokenEvent):

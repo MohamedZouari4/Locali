@@ -14,6 +14,12 @@ of the answer, including later calls in the same batch, for the same reason.
 
 `history` is the conversation's earlier questions and answers (database.get_history), placed between the system
 prompt and the new question. Tool results aren't part of it: they were never saved, and file text stays out of it.
+
+`route` is the router's label for the question (router.py, chosen by chat_service). For a project question or a
+multi-step task, the loop runs search_text with the question's words before the model's first turn, as if the
+model had called it: the LangGraph spike showed qwen3:4b-instruct answering most fact questions about a project
+from memory without searching. After any tool returns file text, a short user message (FILE_TEXT_REMINDER)
+repeats the question and says the file text is data, so a planted instruction is never the last thing it reads.
 """
 
 import json
@@ -21,7 +27,7 @@ import sys
 
 import requests
 
-from app.ai.chat.prompts import SYSTEM_PROMPT, TOOL_LIMIT_MESSAGE, build_prompt
+from app.ai.chat.prompts import FILE_TEXT_REMINDER, SYSTEM_PROMPT, TOOL_LIMIT_MESSAGE, build_prompt
 from app.ai.retrieval import retrieve
 from app.chat_events import SourcesEvent, TokenEvent
 from app.core.config import CHAT_MODEL, MAX_TOOLS_PER_STEP, OLLAMA_URL
@@ -29,6 +35,10 @@ from app.tools import registry
 
 DEBUG = "--debug" in sys.argv
 MAX_TOOL_ROUNDS = 6
+# Routes whose questions are searched for in the project's files before the model's first turn.
+SEARCH_FIRST_ROUTES = ("project_question", "multi_step")
+# The search-first query is the question itself, cut to this length.
+MAX_SEARCH_FIRST_CHARS = 500
 
 
 def build_context(query, k=4, project=None):
@@ -85,9 +95,11 @@ def _chat_payload(messages, offered, stream):
     return payload
 
 
-def _run_tool_calls(tool_calls, messages, offered, project_id=None):
+def _run_tool_calls(tool_calls, messages, offered, project_id=None, question=None):
     # Runs each requested tool through the registry and appends its result to the messages. Returns the tools
-    # still offered: once a tool has put file content into the messages, only read tools stay.
+    # still offered: once a tool has put file content into the messages, only read tools stay, and the
+    # question is repeated after the results with the reminder that file text is data.
+    file_text = False
     for call in tool_calls:
         name = call["function"]["name"]
         arguments = call["function"]["arguments"]
@@ -97,16 +109,31 @@ def _run_tool_calls(tool_calls, messages, offered, project_id=None):
         result = registry.run(name, arguments, set(cards), project_id)
         if result["ok"] and cards[name].returns_content:
             offered = [card for card in offered if card.access == "read"]
+            file_text = True
         if DEBUG:
             print(f"[DEBUG] Tool call result: {result}")
         messages.append({"role": "tool", "content": json.dumps(result, ensure_ascii=False, default=str)})
+    if file_text and question:
+        messages.append({"role": "user", "content": FILE_TEXT_REMINDER.format(question=question)})
     return offered
 
 
-def ask(query, use_docs=False, project=None, project_id=None, history=None):
+def _search_first(question, route, messages, offered, project_id):
+    # For a question about the project's files, runs search_text with the question before the model's first turn,
+    # added to the messages as if the model had called it. Returns the tools still offered.
+    if route not in SEARCH_FIRST_ROUTES or "search_text" not in {card.name for card in offered}:
+        return offered
+    call = {"function": {"name": "search_text", "arguments": {"query": question[:MAX_SEARCH_FIRST_CHARS]}}}
+    messages.append({"role": "assistant", "content": "", "tool_calls": [call]})
+    return _run_tool_calls([call], messages, offered, project_id, question)
+
+
+def ask(query, use_docs=False, project=None, project_id=None, history=None, route=None):
     messages, sources = _build_messages(query, use_docs, project, history)
     offered = _offered_tools(sources, project_id)
-    used_tools = False
+    before = len(messages)
+    offered = _search_first(query, route, messages, offered, project_id)
+    used_tools = len(messages) > before
     answer = TOOL_LIMIT_MESSAGE
     for _ in range(MAX_TOOL_ROUNDS):
         resp = requests.post(f"{OLLAMA_URL}/api/chat", json=_chat_payload(messages, offered, stream=False))
@@ -123,16 +150,16 @@ def ask(query, use_docs=False, project=None, project_id=None, history=None):
 
         used_tools = True
         messages.append(message)
-        offered = _run_tool_calls(tool_calls, messages, offered, project_id)
+        offered = _run_tool_calls(tool_calls, messages, offered, project_id, query)
 
     return answer, sources, used_tools
 
 
-def ask_stream(query, use_docs=False, project=None, project_id=None, history=None):
+def ask_stream(query, use_docs=False, project=None, project_id=None, history=None, route=None):
     # Same as ask(), but yields the answer token by token, then an event with the sources.
     # The caller saves the reply and ends the stream with a done event.
     messages, sources = _build_messages(query, use_docs, project, history)
-    offered = _offered_tools(sources, project_id)
+    offered = _search_first(query, route, messages, _offered_tools(sources, project_id), project_id)
     answer = TOOL_LIMIT_MESSAGE
     for _ in range(MAX_TOOL_ROUNDS):
         tool_calls = []
@@ -163,7 +190,7 @@ def ask_stream(query, use_docs=False, project=None, project_id=None, history=Non
             break
 
         messages.append({"role": "assistant", "content": "".join(parts), "tool_calls": tool_calls})
-        offered = _run_tool_calls(tool_calls, messages, offered, project_id)
+        offered = _run_tool_calls(tool_calls, messages, offered, project_id, query)
     else:
         # The loop ran out of rounds without a final answer.
         yield TokenEvent(text=answer)

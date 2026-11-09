@@ -26,9 +26,10 @@ from unittest.mock import patch
 
 import yaml
 
-from app.ai.chat import orchestrator
+from app.ai.chat import orchestrator, router
 from app.ai.chat.prompts import SYSTEM_PROMPT, TOOL_LIMIT_MESSAGE
 from app.core.config import CHAT_MODEL, MAX_TOOLS_PER_STEP, OLLAMA_URL
+from app.services import chat_service
 from app.tools import registry
 from scripts.spike.fixture import QUESTIONS, spike_project
 
@@ -56,11 +57,16 @@ def _recording_run(calls):
 
 
 def _plain_engine(model, cards, project_id):
-    """Today's loop, held to the given model and tools."""
+    """Today's loop, held to the given model and tools, with the question routed first as the chat service does."""
 
     def ask(question):
-        with patch.object(orchestrator, "CHAT_MODEL", model), patch.object(registry, "offer", lambda limit, project_id=None: cards):
-            answer, _sources, _used_tools = orchestrator.ask(question, project_id=project_id)
+        with (
+            patch.object(orchestrator, "CHAT_MODEL", model),
+            patch.object(router, "CHAT_MODEL", model),
+            patch.object(registry, "offer", lambda limit, project_id=None: cards),
+        ):
+            route = chat_service.route(question, use_docs=False)
+            answer, _sources, _used_tools = orchestrator.ask(question, project_id=project_id, route=route)
         return answer
 
     return ask

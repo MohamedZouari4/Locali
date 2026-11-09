@@ -26,11 +26,21 @@ class ParseTests(unittest.TestCase):
     def test_each_route_is_read_from_the_answer(self):
         for route in router.ROUTES:
             with self.subTest(route):
-                self.assertEqual(router.parse_route('{"route": "%s"}' % route), route)
+                self.assertEqual(router.parse_route(f'{{"route": "{route}"}}'), route)
 
     def test_unsure_falls_back_to_a_project_question(self):
         """P1-E5-T3: anything that isn't a valid route is a project question."""
-        for text in ("", "general_chat", "not json", '{"route": "poetry"}', '{"route": 3}', '{"other": 1}', '["general_chat"]', "null"):
+        for text in (
+            "",
+            "general_chat",
+            "not json",
+            '{"route": "poetry"}',
+            '{"route": 3}',
+            '{"other": 1}',
+            '["general_chat"]',
+            "null",
+            None,
+        ):
             with self.subTest(text):
                 self.assertEqual(router.parse_route(text), router.FALLBACK_ROUTE)
         self.assertEqual(router.FALLBACK_ROUTE, "project_question")
@@ -69,7 +79,10 @@ class LabelledSetTests(unittest.TestCase):
     def test_the_set_has_fifty_distinct_messages_across_all_four_routes(self):
         self.assertEqual(len(self.cases), 50)
         self.assertEqual(len({case["message"] for case in self.cases}), 50)
-        self.assertEqual(Counter(case["route"] for case in self.cases), {"general_chat": 13, "project_question": 13, "action_request": 12, "multi_step": 12})
+        self.assertEqual(
+            Counter(case["route"] for case in self.cases),
+            {"general_chat": 13, "project_question": 13, "action_request": 12, "multi_step": 12},
+        )
         self.assertTrue({case["route"] for case in self.cases} <= set(router.ROUTES))
 
 

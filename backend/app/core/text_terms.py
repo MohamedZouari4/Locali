@@ -3,8 +3,12 @@ keyword search over the indexed chunks and the full-text index over the text cac
 
 A term is a run of letters, marks and digits in any script; spaces, punctuation and "_" end it. Each term
 is folded so that spellings of the same word match: case is folded, accents and other marks are dropped
-(réunion → reunion, ёлка → елка, اَلْمُدِيرُ → المدير, which also turns أ إ آ into ا), and Arabic letters
+(réunion → reunion, ёлка → елка, اَلْمُدِيرُ → مدير, which also turns أ إ آ into ا), and Arabic letters
 written several ways become one (ٱ → ا, ى → ي, ة → ه, tatweel removed, Arabic-Indic digits → 0-9).
+
+Arabic writes "the", "and", "for" and "with" onto the front of a word, so an Arabic word also loses a leading
+و and then one of ال، لل، بال، كال، فال، وال, as the prefix step of the light10 stemmer does, as long as three
+letters remain: الحرارة, للحرارة and والحرارة all become حراره. Short words keep their letters (ولد, الي).
 
 Chinese, Japanese, Thai, Lao, Khmer and Burmese are written without spaces between words, so a run in those
 scripts is split into overlapping pairs of characters (会议记录 → 会议 议记 记录); a word of two or more
@@ -34,6 +38,11 @@ _ARABIC_FORMS = str.maketrans(
         **{chr(0x06F0 + digit): str(digit) for digit in range(10)},
     }
 )
+_ARABIC_WORD = regex.compile(r"\p{Arabic}+")
+# Longest first, so للحراره loses لل rather than nothing.
+_ARABIC_PREFIXES = ("وال", "بال", "كال", "فال", "لل", "ال")
+# A prefix is only removed when at least this many letters remain, so short words keep their meaning.
+_MIN_ARABIC_STEM = 3
 
 
 @functools.lru_cache(maxsize=100_000)
@@ -43,7 +52,18 @@ def fold(word):
         return word.lower()
     decomposed = unicodedata.normalize("NFKD", word.casefold())
     bare = "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
-    return unicodedata.normalize("NFC", bare).translate(_ARABIC_FORMS)
+    folded = unicodedata.normalize("NFC", bare).translate(_ARABIC_FORMS)
+    return _strip_arabic_prefix(folded) if _ARABIC_WORD.fullmatch(folded) else folded
+
+
+def _strip_arabic_prefix(word):
+    # The prefix step of the light10 stemmer: "and", then "the" or "the" joined to a preposition.
+    if word.startswith("و") and len(word) - 1 >= _MIN_ARABIC_STEM:
+        word = word[1:]
+    for prefix in _ARABIC_PREFIXES:
+        if word.startswith(prefix) and len(word) - len(prefix) >= _MIN_ARABIC_STEM:
+            return word[len(prefix) :]
+    return word
 
 
 def terms(text):

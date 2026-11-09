@@ -54,7 +54,8 @@ DANGEROUS_SIGNATURES = ((b"MZ", "pe_executable"), (b"\x7fELF", "elf_executable")
 # Bump when a reader's output or a redaction rule changes, so text cached by the old ones is extracted again.
 # 3: values assigned to secret-named keys are redacted.
 # 4: the cache stores each part's search terms (app/core/text_terms.py) for full-text search in any script.
-EXTRACTOR_VERSION = 4
+# 5: Arabic search terms lose a leading article or prefix (الحرارة and للحرارة are one term).
+EXTRACTOR_VERSION = 5
 
 
 def get_source_type(file_type):
