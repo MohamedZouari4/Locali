@@ -1,0 +1,67 @@
+# 50 labelled messages for the router (P1-E5-T3): 13 general_chat, 13 project_question, 12 action_request,
+# 12 multi_step. All invented; none comes from a real project. Some are in Arabic or French.
+#
+# The rules the labels follow:
+#   general_chat      no files needed: greetings, writing, translation, maths, general knowledge
+#   project_question  one lookup or one read in the user's files answers it
+#   action_request    one change to files or folders (create, move, copy, rename, delete, organize)
+#   multi_step        two or more steps before the answer: several lookups, many files, a comparison, or
+#                     finding files and then changing them
+
+# general_chat
+- {message: "hi", route: general_chat}
+- {message: "Thanks, that helps.", route: general_chat}
+- {message: "What is the capital of Tunisia?", route: general_chat}
+- {message: "Rewrite this to sound more polite: send me the report now.", route: general_chat}
+- {message: "Write a short cover letter for a research internship in genomics.", route: general_chat}
+- {message: "What is 17 times 23?", route: general_chat}
+- {message: "Explain what a REST API is in two sentences.", route: general_chat}
+- {message: "Translate 'good morning' into Arabic and French.", route: general_chat}
+- {message: "Give me three tips for a job interview.", route: general_chat}
+- {message: "ما هي عاصمة تونس؟", route: general_chat}
+- {message: "Peux-tu m'expliquer la différence entre la RAM et un disque dur ?", route: general_chat}
+- {message: "Summarize this paragraph: the meeting moved to Friday because Karim is away.", route: general_chat}
+- {message: "Tell me a joke about programmers.", route: general_chat}
+
+# project_question
+- {message: "What is the quarterly budget of the Greenhouse project?", route: project_question}
+- {message: "Which PDFs in this project changed this month?", route: project_question}
+- {message: "Where do my files mention solar panels?", route: project_question}
+- {message: "Read page 3 of the Q3 report.", route: project_question}
+- {message: "What does the meeting note say about the launch date?", route: project_question}
+- {message: "How many files are in my project?", route: project_question}
+- {message: "What does the screenshot shot.png say?", route: project_question}
+- {message: "Who owns the dashboard according to my notes?", route: project_question}
+- {message: "What does pump.py do?", route: project_question}
+- {message: "List the files I edited last week.", route: project_question}
+- {message: "Show me the largest file in this project.", route: project_question}
+- {message: "ما الذي تقوله ملفاتي عن الميزانية؟", route: project_question}
+- {message: "Dans quel fichier parle-t-on de la réunion mensuelle ?", route: project_question}
+
+# action_request
+- {message: "Create a folder called archive.", route: action_request}
+- {message: "Move report.pdf into the archive folder.", route: action_request}
+- {message: "Rename notes.txt to notes-old.txt.", route: action_request}
+- {message: "Rename the file draft.docx to final.docx.", route: action_request}
+- {message: "Delete the old backup folder.", route: action_request}
+- {message: "Organize this folder by file type.", route: action_request}
+- {message: "Sort the files in my downloads folder by extension.", route: action_request}
+- {message: "Copy the Q3 report to the desktop.", route: action_request}
+- {message: "Delete all empty files.", route: action_request}
+- {message: "Create a new folder named 2026.", route: action_request}
+- {message: "أنشئ مجلدا جديدا باسم أرشيف.", route: action_request}
+- {message: "Déplace tous les PDF dans un dossier pdf.", route: action_request}
+
+# multi_step
+- {message: "Find every PDF from this month and summarize each one.", route: multi_step}
+- {message: "Search my files for the budget, then read the page it is on and tell me the total.", route: multi_step}
+- {message: "Compare the Q3 report with the meeting notes and list the differences.", route: multi_step}
+- {message: "Find the empty files and delete them.", route: multi_step}
+- {message: "Find every PDF larger than 5 MB and move it into a folder called big.", route: multi_step}
+- {message: "Read all the Markdown files and give me a one-paragraph summary of each.", route: multi_step}
+- {message: "Check which sensor is reported as failing, then find out which pump is its backup.", route: multi_step}
+- {message: "Go through my meeting notes and list every decision with the file it came from.", route: multi_step}
+- {message: "Find all files that mention HX-220 and say what each one says about it.", route: multi_step}
+- {message: "Find the three largest files and tell me what each of them contains.", route: multi_step}
+- {message: "ابحث عن كل ملفات PDF ولخص كل واحد منها.", route: multi_step}
+- {message: "Trouve les fichiers qui parlent du budget, lis-les et fais un tableau récapitulatif.", route: multi_step}
