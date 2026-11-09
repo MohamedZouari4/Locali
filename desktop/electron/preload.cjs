@@ -58,8 +58,8 @@ contextBridge.exposeInMainWorld('localiAPI', {
   },
 
   files: {
-    reveal: (relativePath) =>
-      ipcRenderer.invoke('api:files:reveal', { relativePath }),
+    // Shows the file in Explorer if it is inside the workspace, an indexed folder or the project's folders.
+    reveal: (filePath, projectId) => ipcRenderer.invoke('api:files:reveal', { filePath, projectId }),
   },
 
   chatStream: {

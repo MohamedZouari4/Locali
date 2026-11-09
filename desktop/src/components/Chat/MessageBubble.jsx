@@ -1,9 +1,11 @@
-// One chat message, with source chips that reveal the cited file when clicked.
-// User messages are right-aligned bubbles; Locali's answers sit next to its mark, without a bubble.
+// One chat message, with source chips that reveal the cited file when clicked (onReveal).
+// User messages are right-aligned plain-text bubbles; Locali's answers sit next to its mark, without a
+// bubble, and render their Markdown safely (Markdown.jsx).
 
 import { BrandMark, Icon } from '../Icon'
+import { Markdown } from './Markdown'
 
-export function MessageBubble({ message, onRetry }) {
+export function MessageBubble({ message, onRetry, onReveal }) {
   const { role, text, isStreaming, sources, error, stopped, incomplete } = message
 
   if (role === 'user') {
@@ -20,7 +22,7 @@ export function MessageBubble({ message, onRetry }) {
       <div className="message__body">
         {text ? (
           <div className="message__text">
-            {text}
+            <Markdown text={text} />
             {isStreaming && <span className="message__cursor" aria-hidden="true" />}
           </div>
         ) : (
@@ -56,7 +58,7 @@ export function MessageBubble({ message, onRetry }) {
                   key={sourcePath}
                   type="button"
                   className="citation-chip"
-                  onClick={() => window.localiAPI.files.reveal(sourcePath)}
+                  onClick={() => onReveal(sourcePath)}
                   title={`Reveal ${sourcePath}`}
                 >
                   <Icon name="file" size={13} />

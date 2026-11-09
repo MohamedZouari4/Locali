@@ -29,7 +29,7 @@ Status key:
 | 8 | `ingest(fullReset)` | `POST /ingest` | Supported | No | A `409` (already running) reaches the UI only as "API /ingest failed: 409" (see C1). |
 | 9 | `ingestStatus()` | `GET /ingest/status` | Supported | No | The reply shape isn't documented (see C3). |
 | 10 | `files.list(path)` | `GET /files` | Supported | No | Returns names only, with no file/folder type or size. |
-| 11 | `files.reveal(relativePath)` | None (Electron only) | Partial | Yes (source chips) | Sources are absolute paths from anywhere in `SCAN_DRIVES`, but reveal only allows paths inside `AI-Workspace`, so any source outside it is refused. The parameter is named `relativePath` but receives absolute paths. |
+| 11 | `files.reveal(filePath, projectId)` | `GET /folders`, `GET /projects/{id}` (Electron only) | Yes | Yes (source chips) | Reveals a file only inside the workspace, an indexed folder or the chat's project folders, as listed by the backend at click time; links and junctions are resolved before the check. |
 | 12 | `chatStream.start(message, conversationId, useDocs)` | `WS /chat/stream` | Partial | Yes | Can't send `project`. |
 | 13 | `chatStream.stop()` | None (closes the socket) | Supported | Yes | The backend treats a disconnect as a stop and saves the reply as incomplete. |
 | 14 | `chatStream.onChunk` | `token` event | Supported | Yes | |

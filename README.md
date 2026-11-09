@@ -306,7 +306,6 @@ A database migrated by a newer Locali is refused at startup rather than changed.
 - Full-text search only covers files whose text has been read into the cache, and it isn't offered as a route or a chat tool yet.
 - Pre-extraction only runs on Windows, and it doesn't read a changed file again until something reads it; files never read, or cached by an older reader, are picked up.
 - Changes made while Locali is closed are picked up by the next Scan files or Index now, not at startup. On FAT and exFAT drives, such as most USB sticks, Windows file IDs change when a file moves, so a moved file there may get a new catalog id.
-- Source chips can only reveal files inside the workspace folder; indexed files elsewhere are refused.
 - Electron Builder packages only `dist/` and Electron files. It does not bundle Python, the backend, Tesseract, or Ollama models.
 - The cross-encoder may download from Hugging Face on first use unless already cached.
 

@@ -349,21 +349,46 @@ ipcMain.handle('api:folders:remove', (_event, { id }) => api.removeFolder(id));
 
 ipcMain.handle('api:indexing:start', () => api.startIndexing());
 
-ipcMain.handle('api:files:reveal', (_event, { relativePath }) => {
-  if (typeof relativePath !== 'string') {
-    throw new Error('Refused: reveal path must be relative to the workspace root');
+// The real path of a file or folder, with links and junctions resolved, or null if it doesn't exist.
+function realPathOrNull(target) {
+  try {
+    return fs.realpathSync.native(target);
+  } catch {
+    return null;
+  }
+}
+
+// Whether `target` is strictly inside `folder`. path.relative compares without regard to case on Windows.
+function isInside(folder, target) {
+  const relative = path.relative(folder, target);
+  return Boolean(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+// A source chip may reveal a file only inside a folder Locali knows: the workspace, an indexed folder, or
+// a folder of the chat's project. The folder list comes from the backend at click time, so the page can't
+// widen it, and every path is resolved first, so a link inside a folder can't send Explorer outside it.
+ipcMain.handle('api:files:reveal', async (_event, { filePath, projectId }) => {
+  if (typeof filePath !== 'string' || !filePath) {
+    throw new Error('Refused: no file to reveal');
+  }
+  const target = realPathOrNull(path.isAbsolute(filePath) ? path.resolve(filePath) : path.resolve(ALLOWED_ROOT, filePath));
+  if (!target) {
+    throw new Error('That file no longer exists.');
   }
 
-  const root = path.resolve(ALLOWED_ROOT);
-  const resolved = path.isAbsolute(relativePath)
-    ? path.resolve(relativePath)
-    : path.resolve(root, relativePath);
-  const relative = path.relative(root, resolved);
-  if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-    throw new Error('Refused: path escapes the allowed workspace root');
+  const [indexed, project] = await Promise.all([
+    api.listFolders().catch(() => []),
+    typeof projectId === 'string' ? api.getProject(projectId).catch(() => null) : null,
+  ]);
+  const folders = [ALLOWED_ROOT, ...indexed.map((folder) => folder.path), ...(project?.folders ?? []).map((folder) => folder.path)];
+  for (const folder of folders) {
+    const real = realPathOrNull(folder);
+    if (real && isInside(real, target)) {
+      shell.showItemInFolder(target);
+      return;
+    }
   }
-
-  shell.showItemInFolder(resolved);
+  throw new Error('Refused: that file is outside your indexed and project folders');
 });
 
 app.on('before-quit', () => {

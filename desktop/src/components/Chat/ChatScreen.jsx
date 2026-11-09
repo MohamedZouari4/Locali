@@ -24,11 +24,12 @@ import { ProjectSwitcher } from './ProjectSwitcher'
 import { Toast } from './Toast'
 import './ChatScreen.css'
 
+// Each suggestion is something a project chat's tools can do (with "Use my docs" off).
 const suggestions = [
-  { icon: 'file', title: 'Understand my files', text: 'Summarize the documents in my project folder.' },
-  { icon: 'search', title: 'Find something', text: 'Find files related to my AI research.' },
-  { icon: 'wrench', title: 'Fix a problem', text: 'Why is my Python application crashing?' },
-  { icon: 'code', title: 'Understand my code', text: 'Explain how authentication works in this project.' },
+  { icon: 'folder', title: 'Get an overview', text: 'What is in this project? Give me an overview of its files.' },
+  { icon: 'search', title: 'Find files', text: 'Which PDFs in this project changed this month?' },
+  { icon: 'file', title: 'Search the text', text: 'Where do my files mention "budget"? Name the file and page.' },
+  { icon: 'code', title: 'Read a screenshot', text: 'Find the newest image in this project and tell me what it says.' },
 ]
 
 // Below this width the sidebar floats over the chat instead of pushing it aside (matches ChatScreen.css).
@@ -66,6 +67,10 @@ export function ChatScreen() {
   }
 
   useEffect(() => () => clearTimeout(toastTimer.current), [])
+
+  // Errors from the main process arrive as "Error invoking remote method '…': Error: …"; keep the last part.
+  const revealSource = (sourcePath) =>
+    window.localiAPI.files.reveal(sourcePath, projectId).catch((error) => showToast(String(error?.message ?? error).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
 
   // The backend saves every turn, so reload the list on start and whenever an answer ends.
   useEffect(() => {
@@ -284,7 +289,7 @@ export function ChatScreen() {
                 </div>
               </div>
             ) : (
-              messages.map((message, index) => <MessageBubble key={message.id} message={message} onRetry={index === messages.length - 1 ? retry : undefined} />)
+              messages.map((message, index) => <MessageBubble key={message.id} message={message} onRetry={index === messages.length - 1 ? retry : undefined} onReveal={revealSource} />)
             )}
           </div>
         </div>
@@ -307,10 +312,12 @@ export function ChatScreen() {
               rows={1}
             />
             <div className="composer__footer">
-              <button className={`docs-toggle ${useDocs ? 'docs-toggle--on' : ''}`} type="button" onClick={toggleDocs} aria-pressed={useDocs} title="Answer using the files in your workspace">
+              <button className={`docs-toggle ${useDocs ? 'docs-toggle--on' : ''}`} type="button" onClick={toggleDocs} aria-pressed={useDocs} title="Answer from passages in your indexed folders. While passages are used, project file tools pause.">
                 <Icon name="file" size={15} /> Use my docs
               </button>
-              <span className="composer__hint"><kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line</span>
+              <span className="composer__hint">
+                {useDocs ? 'Indexed folders on · file tools pause when passages are found' : <><kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line</>}
+              </span>
               {isBusy ? (
                 <button className="send-button send-button--stop" type="button" onClick={stop} aria-label="Stop generating"><Icon name="stop" /></button>
               ) : (

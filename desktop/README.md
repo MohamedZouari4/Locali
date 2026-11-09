@@ -85,6 +85,6 @@ files. Both are covered by the repository's MIT licence.
 | `folders.list()` / `folders.remove(id)` | `GET /folders` / `DELETE /folders/{id}` |
 | `folders.choose()` | Opens the native folder picker in the main process, then `POST /folders`; the page never sends a path |
 | `indexing.start()` | `POST /ingest` (runs as a background job) |
-| `files.reveal(relativePath)` | None; opens the file in Explorer, workspace (`AI-Workspace/`) paths only |
+| `files.reveal(filePath, projectId)` | `GET /folders` and `GET /projects/{id}` for the allowed folders, then opens the file in Explorer; only files inside the workspace, an indexed folder or the project's folders, with links resolved |
 
 See [docs/BRIDGE_AUDIT.md](../docs/BRIDGE_AUDIT.md) for how each method was checked.
