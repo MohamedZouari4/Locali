@@ -29,8 +29,9 @@ The maintainer makes the edits by hand. **Don't edit project files** unless the 
 
 ## 2. Write the plan
 
-Start with 2–4 sentences on what the ticket means in this codebase and the approach, plus anything
-the ticket gets wrong or leaves open. Then give numbered steps:
+Start with 2–4 sentences on what the ticket means in this codebase and the approach, plus identify
+whether the ticket contains incorrect information or is missing details regarding its requirements or
+implementation. Then give numbered steps:
 
 ```
 ### Step N — <what this step achieves>  (`backend/app/services/x.py`)

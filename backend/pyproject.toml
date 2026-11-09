@@ -29,6 +29,11 @@ dev = [
     "ruff==0.16.8",  # keep in step with rev in .pre-commit-config.yaml
 ]
 
+spike = [
+    "langchain-ollama>=1.1.0",
+    "langgraph>=1.2.20",
+]
+
 # The backend is an application run from this folder, not a package to install.
 [tool.uv]
 package = false
