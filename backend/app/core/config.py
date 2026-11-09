@@ -41,6 +41,9 @@ class LimitSettings:
     max_file_size_mb: int = 50  # larger files are never indexed or catalogued
     max_read_chars: int = 8000  # one read of part of a file returns at most this much text, so it fits the model's context
     max_tools_per_step: int = 6  # the chat model is offered at most this many tools at a time; a small model picks better from few
+    chat_history_messages: int = (
+        6  # the chat model is sent this many of the conversation's latest messages; a small model's context is short
+    )
     watch_folders_check_seconds: float = 5.0  # how often the file watcher looks for added or removed folders
     preextract_enabled: bool = True  # read small files into the text cache while the computer is idle (Windows only)
     preextract_idle_seconds: int = 120  # no keyboard or mouse input for this long counts as idle
@@ -261,6 +264,7 @@ JOB_POLL_SECONDS = LIMITS.job_poll_seconds
 MAX_FILE_SIZE_MB = LIMITS.max_file_size_mb
 MAX_READ_CHARS = LIMITS.max_read_chars
 MAX_TOOLS_PER_STEP = LIMITS.max_tools_per_step
+CHAT_HISTORY_MESSAGES = LIMITS.chat_history_messages
 WATCH_DEBOUNCE_MS = LIMITS.watch_debounce_ms
 WATCH_FOLDERS_CHECK_SECONDS = LIMITS.watch_folders_check_seconds
 JOB_PROGRESS_INTERVAL_SECONDS = LIMITS.job_progress_interval_seconds

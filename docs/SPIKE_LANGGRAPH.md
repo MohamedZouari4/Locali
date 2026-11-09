@@ -48,3 +48,5 @@ Failure types and examples:
 - Known limits:
 
 ## Consequences for P1-E5
+
+- History reaches the model from the `messages` table (P1-E5-T2, Part A). A checkpointer is a separate decision.

@@ -154,6 +154,7 @@ All settings live in [backend/app/core/config.py](backend/app/core/config.py), g
 | `WATCH_FOLDERS_CHECK_SECONDS` | `5.0` | How often the file watcher looks for added or removed folders. |
 | `MAX_READ_CHARS` | `8000` | The most text one read of part of a file returns (a PDF page, a section or a line range); the reply gives the line it stopped at and the file's totals. |
 | `MAX_TOOLS_PER_STEP` | `6` | The chat model is offered at most this many tools at a time, the lowest risk first; a small model chooses better from few. |
+| `CHAT_HISTORY_MESSAGES` | `6` | The chat model is sent this many of the conversation's latest messages (questions and answers) before the new question, so follow-ups make sense and a restart keeps the context. A small model's context is short, so keep it low. |
 | `PREEXTRACT_ENABLED` | `True` | Reads small files into the text cache while the computer is idle. Windows only; elsewhere idleness can't be measured, so it never runs. |
 | `PREEXTRACT_IDLE_SECONDS` | `120` | No keyboard or mouse input for this long counts as idle. |
 | `PREEXTRACT_MAX_FILE_MB` | `5` | Only files up to this size, with a text reader (not images), are read ahead. |

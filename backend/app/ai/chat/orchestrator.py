@@ -11,6 +11,9 @@ The model's answer is returned with the sources it used, and whether it called a
 
 Once a tool has returned text from the user's files (search_text, read_file), only read tools stay offered for the rest
 of the answer, including later calls in the same batch, for the same reason.
+
+`history` is the conversation's earlier questions and answers (database.get_history), placed between the system
+prompt and the new question. Tool results aren't part of it: they were never saved, and file text stays out of it.
 """
 
 import json
@@ -51,7 +54,7 @@ def build_context(query, k=4, project=None):
     return context_block, sources
 
 
-def _build_messages(query, use_docs, project):
+def _build_messages(query, use_docs, project, history=None):
     # Returns the chat history to send to the model and the sources used to build the context.
     sources = []
     if use_docs:
@@ -64,6 +67,7 @@ def _build_messages(query, use_docs, project):
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
+        *(history or []),
         {"role": "user", "content": prompt},
     ]
     return messages, sources
@@ -99,8 +103,8 @@ def _run_tool_calls(tool_calls, messages, offered, project_id=None):
     return offered
 
 
-def ask(query, use_docs=False, project=None, project_id=None):
-    messages, sources = _build_messages(query, use_docs, project)
+def ask(query, use_docs=False, project=None, project_id=None, history=None):
+    messages, sources = _build_messages(query, use_docs, project, history)
     offered = _offered_tools(sources, project_id)
     used_tools = False
     answer = TOOL_LIMIT_MESSAGE
@@ -124,10 +128,10 @@ def ask(query, use_docs=False, project=None, project_id=None):
     return answer, sources, used_tools
 
 
-def ask_stream(query, use_docs=False, project=None, project_id=None):
+def ask_stream(query, use_docs=False, project=None, project_id=None, history=None):
     # Same as ask(), but yields the answer token by token, then an event with the sources.
     # The caller saves the reply and ends the stream with a done event.
-    messages, sources = _build_messages(query, use_docs, project)
+    messages, sources = _build_messages(query, use_docs, project, history)
     offered = _offered_tools(sources, project_id)
     answer = TOOL_LIMIT_MESSAGE
     for _ in range(MAX_TOOL_ROUNDS):

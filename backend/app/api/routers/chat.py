@@ -76,11 +76,13 @@ async def chat_stream(websocket: WebSocket):
         request = ChatStreamRequest.model_validate(await websocket.receive_json())
         is_greeting = bool(GREETING_RE.match(request.message.strip().lower()))
         use_docs = request.use_docs if request.use_docs is not None else not is_greeting
+        # The earlier messages are read first, so the new question isn't in them.
+        history = await asyncio.to_thread(chat_service.history, request.project_id, request.conversation_id)
         # Save the user message (and an empty reply marked streaming) before the model runs.
         conversation_id, reply_id = await asyncio.to_thread(
             chat_service.begin_turn, request.project_id, request.conversation_id, request.message
         )
-        events = ask_stream(request.message, use_docs=use_docs, project=request.project, project_id=request.project_id)
+        events = ask_stream(request.message, use_docs=use_docs, project=request.project, project_id=request.project_id, history=history)
         # Each next() on the generator runs in a worker thread so the server isn't blocked.
         async for event in iterate_in_threadpool(events):
             if isinstance(event, TokenEvent):

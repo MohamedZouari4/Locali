@@ -103,6 +103,22 @@ def get_messages(conversation_id):
     return [dict(row) for row in cur]
 
 
+def get_history(conversation_id, project_id, limit):
+    """The latest `limit` finished messages of a conversation in `project_id` as {"role", "content"}, oldest first,
+    for the chat model. Empty if the conversation doesn't exist in that project, so a chat from another project is
+    never read. A reply still streaming or empty is left out; an interrupted one is kept, since the user saw it.
+    Only the saved question and answer text is returned, never tool results."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT m.role, m.content FROM messages m JOIN conversations c ON c.id = m.conversation_id"
+        " WHERE m.conversation_id = ? AND c.project_id IS ? AND m.status != 'streaming' AND m.content != ''"
+        " ORDER BY m.id DESC LIMIT ?",
+        (conversation_id, project_id, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in reversed(rows)]
+
+
 # Most recently active first: by the newest message, or the start time for an empty conversation.
 _CONVERSATION_SUMMARY = """
     SELECT c.id, c.title, c.project_id, c.started_at,
